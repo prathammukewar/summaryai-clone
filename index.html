@@ -4,45 +4,36 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Summary AI</title>
-  <meta name="description" content="Record, transcribe, and sync your notes on every device.">
+  <meta name="description" content="Record, transcribe, and summarize meetings and lectures in your browser.">
   <meta name="theme-color" content="#3F7CF5">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-  <symbol id="i-mic" viewBox="0 0 174 174">
+  <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>
+  </symbol>
+  <symbol id="i-logo" viewBox="0 0 174 174">
     <rect x="50" y="0" width="74" height="124" rx="37" fill="currentColor"/>
     <path d="M31 87a56 56 0 0 0 112 0" fill="none" stroke="currentColor" stroke-width="12.4" stroke-linecap="round"/>
     <path d="M87 143v25" stroke="currentColor" stroke-width="12.4" stroke-linecap="round"/>
-    <g stroke="var(--mic-bg, #3F7CF5)" stroke-width="11" stroke-linecap="round">
+    <g stroke="#4A83F6" stroke-width="11" stroke-linecap="round">
       <path d="M62.5 56.6v17.8"/><path d="M78.8 46.4v38.2"/><path d="M95.2 32.1v66.8"/><path d="M111.5 56.6v17.8"/>
     </g>
   </symbol>
-  <symbol id="i-star" viewBox="0 0 24 24">
-    <path fill="currentColor" d="M12 2.5l2.9 6.1 6.7.8-4.9 4.6 1.3 6.6L12 17.3l-6 3.3 1.3-6.6L2.4 9.4l6.7-.8z"/>
+  <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 16V4M7 9l5-5 5 5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
   </symbol>
-  <symbol id="i-google" viewBox="0 0 48 48">
-    <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.3l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/>
-    <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/>
-    <path fill="#FBBC05" d="M10.5 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.6 10.7l7.9-6.1z"/>
-    <path fill="#34A853" d="M24 48c6.3 0 11.7-2.1 15.6-5.7l-7.7-6c-2.1 1.4-4.8 2.3-7.9 2.3-6.3 0-11.6-4.1-13.5-9.9l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/>
-  </symbol>
-  <symbol id="i-apple" viewBox="0 0 24 24">
-    <path fill="currentColor" d="M16.4 12.7c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.8 1.3 10.3.9 1.3 1.9 2.7 3.3 2.6 1.3-.1 1.8-.9 3.4-.9s2 .9 3.4.8c1.4 0 2.3-1.3 3.2-2.5 1-1.4 1.4-2.8 1.4-2.9 0 0-2.8-1.1-2.8-4.1zM13.9 5c.7-.9 1.2-2.1 1.1-3.3-1 0-2.3.7-3 1.6-.7.8-1.2 2-1.1 3.2 1.1.1 2.3-.6 3-1.5z"/>
-  </symbol>
-  <symbol id="i-guest" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="9.25"/><circle cx="12" cy="10" r="3"/><path d="M6.2 18.4c1.2-2.2 3.3-3.4 5.8-3.4s4.6 1.2 5.8 3.4"/>
-  </symbol>
-  <symbol id="i-chev" viewBox="0 0 24 24">
-    <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  </symbol>
-  <symbol id="i-notes" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13h6M10 17h6"/>
+  </symbol>
+  <symbol id="i-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 6h16M4 12h16M4 18h10"/>
   </symbol>
   <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
@@ -50,152 +41,107 @@
   <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
   </symbol>
+  <symbol id="i-notes" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>
+  </symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>
+  </symbol>
   <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>
+  </symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM5 18l.7 2 2 .7-2 .7L5 23l-.7-1.6-2-.7 2-.7zM19 3l.5 1.5L21 5l-1.5.5L19 7l-.5-1.5L17 5l1.5-.5z"/>
+  </symbol>
+  <symbol id="i-speaker" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 9v6h4l5 4V5L8 9zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>
+  </symbol>
+  <symbol id="i-export" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 4v11M8 8l4-4 4 4M5 15v4a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4"/>
+  </symbol>
+  <symbol id="i-chev-l" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 6l-6 6 6 6"/>
+  </symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <path d="M4 7h16M4 12h16M4 17h16"/>
+  </symbol>
+  <symbol id="i-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+    <path d="M12 3a9 9 0 1 1-9 9"/>
   </symbol>
   <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
     <path d="M6 6l12 12M18 6L6 18"/>
   </symbol>
-  <symbol id="i-empty" viewBox="0 0 120 96" fill="none">
-    <path d="M10 26a6 6 0 0 1 6-6h26l10 10h52a6 6 0 0 1 6 6v44a6 6 0 0 1-6 6H16a6 6 0 0 1-6-6z" fill="#E9EEFF"/>
-    <path d="M10 42h100v44a6 6 0 0 1-6 6H16a6 6 0 0 1-6-6z" fill="#C9D6FF"/>
-    <path d="M44 62h32M52 72h16" stroke="#3F7CF5" stroke-width="3" stroke-linecap="round"/>
-  </symbol>
 </svg>
 
-<!-- Welcome / sign-in -->
-<div id="view-home" class="view">
-  <a class="brand" href="#/home">
-    <span class="logo"><svg><use href="#i-mic"/></svg></span>
-    <span>Summary AI</span>
-  </a>
-
-  <main class="welcome">
-    <section class="hero" aria-label="Testimonial">
-      <div class="hero-inner">
-        <div class="person">
-          <img class="avatar" src="assets/avatar.svg" alt="" width="80" height="80">
-          <div>
-            <div class="person-name">Maya Okafor</div>
-            <div class="person-role">Head of Sales</div>
-          </div>
-        </div>
-        <p class="quote">"Every leadership meeting goes through Summary AI now. The recap beats anything I'd write by hand, and nobody has to ask what we decided."</p>
-        <div class="badge" aria-label="Over ten million downloads, five star rating">
-          <img class="laurel" src="assets/laurel.svg" alt="" width="62" height="78">
-          <div class="badge-center">
-            <div class="badge-num">10M+</div>
-            <div class="badge-label">Downloads</div>
-            <div class="stars">
-              <svg><use href="#i-star"/></svg><svg><use href="#i-star"/></svg><svg><use href="#i-star"/></svg><svg><use href="#i-star"/></svg><svg><use href="#i-star"/></svg>
-            </div>
-          </div>
-          <img class="laurel right" src="assets/laurel.svg" alt="" width="62" height="78">
-        </div>
+<div class="app">
+  <aside class="side" id="side">
+    <div class="side-top">
+      <a class="brand" href="#/notes">
+        <span class="logo"><svg><use href="#i-logo"/></svg></span>
+        <span>Summary AI</span>
+      </a>
+      <button class="icon-btn menu-btn" id="menu-btn" type="button" aria-label="Menu"><svg><use href="#i-menu"/></svg></button>
+    </div>
+    <div class="side-body">
+      <div class="side-actions">
+        <button class="btn primary block" id="act-record" type="button"><svg><use href="#i-mic"/></svg>Record</button>
+        <button class="btn block" id="act-upload" type="button"><svg><use href="#i-upload"/></svg>Upload audio or video</button>
+        <button class="btn block" id="act-import" type="button"><svg><use href="#i-doc"/></svg>Import PDF or text file</button>
+        <button class="btn block" id="act-paste" type="button"><svg><use href="#i-text"/></svg>Paste text</button>
       </div>
-    </section>
-
-    <section class="auth" aria-label="Sign in">
-      <div class="auth-inner">
-        <h1>Welcome to<br>Summary AI</h1>
-        <p class="lede">Record, transcribe, and sync your notes on every device.</p>
-        <p class="hint">Create or sign in to your account</p>
-
-        <button class="btn" id="btn-google" type="button">
-          <svg class="ic"><use href="#i-google"/></svg>
-          <span>Google</span>
-          <svg class="chev"><use href="#i-chev"/></svg>
-        </button>
-        <button class="btn" id="btn-apple" type="button">
-          <svg class="ic"><use href="#i-apple"/></svg>
-          <span>Apple</span>
-          <svg class="chev"><use href="#i-chev"/></svg>
-        </button>
-        <button class="btn primary" id="btn-guest" type="button">
-          <svg class="ic"><use href="#i-guest"/></svg>
-          <span>Start as Guest</span>
-          <svg class="chev"><use href="#i-chev"/></svg>
-        </button>
-
-        <p class="fineprint">Unofficial front-end recreation built for practice. Not affiliated with Summary AI. Sign-in buttons are placeholders and nothing leaves your browser.</p>
-      </div>
-    </section>
-  </main>
-</div>
-
-<!-- Guest workspace -->
-<div id="view-app" class="view app" hidden>
-  <aside class="side">
-    <a class="brand" href="#/home">
-      <span class="logo"><svg><use href="#i-mic"/></svg></span>
-      <span>Summary AI</span>
-    </a>
-    <nav class="nav" aria-label="Sections">
-      <a class="active" href="#/app"><svg><use href="#i-notes"/></svg>Notes</a>
-      <a href="#/app" data-soon><svg><use href="#i-folder"/></svg>Folders</a>
-      <a href="#/app" data-soon><svg><use href="#i-gear"/></svg>Settings</a>
-    </nav>
-    <div class="side-foot">
-      <div class="guest-chip"><svg><use href="#i-guest"/></svg>Guest</div>
-      <p>Notes stay in this browser until you sign in.</p>
-      <button class="link" id="btn-signout" type="button">Sign out</button>
+      <nav class="nav" aria-label="Sections">
+        <a href="#/notes" data-nav="notes"><svg><use href="#i-notes"/></svg><span>All notes</span></a>
+        <div class="nav-label">Folders</div>
+        <div id="folder-list"></div>
+        <a href="#/settings" data-nav="settings"><svg><use href="#i-gear"/></svg><span>Settings</span></a>
+      </nav>
+      <div class="side-foot">Notes and audio stay in this browser. AI features talk to Anthropic directly with your own key.</div>
     </div>
   </aside>
-
-  <main class="main">
-    <div class="main-head">
-      <div>
-        <h2>Your notes</h2>
-        <div class="count" id="count"></div>
-      </div>
-      <button class="btn-sm primary" id="btn-record" type="button">
-        <span class="dot"></span>New recording
-      </button>
-    </div>
-
-    <div class="empty" id="empty">
-      <svg><use href="#i-empty"/></svg>
-      <h3>No notes yet</h3>
-      <p>Tap New recording to capture a lecture or meeting. The summary shows up here when it's done.</p>
-    </div>
-
-    <div class="notes" id="notes" hidden></div>
-  </main>
+  <main class="main" id="main"></main>
 </div>
 
-<!-- Recorder -->
-<div class="overlay" id="rec" hidden>
-  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rec-title">
-    <h3 id="rec-title">Recording</h3>
-    <div class="rec-time" id="rec-time">0:00</div>
-    <div class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-    <p class="muted">This clone doesn't use your microphone. The timer runs so you can see the flow.</p>
+<input type="file" id="file-audio" accept="audio/*,video/*" hidden>
+<input type="file" id="file-doc" accept=".pdf,.txt,.md,.markdown,text/plain,application/pdf" hidden>
+
+<div class="overlay" id="rec-overlay" hidden>
+  <div class="sheet rec-sheet" role="dialog" aria-modal="true" aria-labelledby="rec-title">
+    <div class="rec-top">
+      <span class="rec-dot" id="rec-dot"></span>
+      <h3 id="rec-title">Recording</h3>
+      <span class="rec-time" id="rec-time">0:00</span>
+    </div>
+    <canvas id="rec-wave" width="640" height="80" aria-hidden="true"></canvas>
+    <div class="captions" id="rec-captions"><span class="muted" id="rec-hint">Live captions appear here while you talk.</span></div>
     <div class="row">
-      <button class="btn-sm" id="rec-cancel" type="button">Cancel</button>
-      <button class="btn-sm primary" id="rec-stop" type="button">Stop and save</button>
+      <button class="btn sm" id="rec-cancel" type="button">Cancel</button>
+      <button class="btn sm" id="rec-pause" type="button">Pause</button>
+      <button class="btn primary sm" id="rec-stop" type="button">Stop and transcribe</button>
     </div>
   </div>
 </div>
 
-<!-- Note detail -->
-<div class="overlay" id="detail" hidden>
-  <div class="sheet wide" role="dialog" aria-modal="true" aria-labelledby="d-title">
-    <div class="sheet-head">
-      <div>
-        <h3 id="d-title"></h3>
-        <div class="muted" id="d-meta"></div>
-      </div>
-      <button class="icon-btn" id="d-close" type="button" aria-label="Close"><svg><use href="#i-x"/></svg></button>
-    </div>
-    <div id="d-body"></div>
+<div class="overlay" id="text-overlay" hidden>
+  <div class="sheet wide" role="dialog" aria-modal="true" aria-labelledby="text-title-h">
+    <div class="sheet-head"><h3 id="text-title-h">Paste text</h3><button class="icon-btn" id="text-close" type="button" aria-label="Close"><svg><use href="#i-x"/></svg></button></div>
+    <input class="input" id="text-title" placeholder="Title (optional)">
+    <textarea class="input" id="text-body" rows="10" placeholder="Paste a transcript, article, or your own notes"></textarea>
     <div class="row end">
-      <button class="btn-sm danger" id="d-delete" type="button"><svg><use href="#i-trash"/></svg>Delete</button>
+      <button class="btn sm" id="text-cancel" type="button">Cancel</button>
+      <button class="btn primary sm" id="text-save" type="button">Create note</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="progress-overlay" hidden>
+  <div class="sheet small" role="status" aria-live="polite">
+    <svg class="spin big"><use href="#i-spin"/></svg>
+    <p id="progress-text">Working</p>
   </div>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="app.js"></script>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>
