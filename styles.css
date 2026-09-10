@@ -96,6 +96,7 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; line-height
 .welcome p { color: var(--muted); max-width: 520px; margin: 0 auto 22px; line-height: 1.55; font-size: 14.5px; }
 .welcome-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .welcome-link { display: inline-block; margin-top: 18px; font-size: 14px; }
+.link-btn { display: block; margin: 16px auto 0; background: none; border: 0; color: var(--blue); font-size: 13.5px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .empty { border: 1px dashed var(--line); border-radius: 16px; padding: 48px 24px; text-align: center; color: var(--muted); }
 .empty h3 { color: var(--ink); font-size: 17px; margin-bottom: 6px; }
 .empty p { max-width: 420px; margin: 0 auto 14px; font-size: 14px; line-height: 1.5; }

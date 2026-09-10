@@ -174,6 +174,7 @@ function welcomeHTML() {
       <button class="btn" data-act="upload" type="button">${icon('i-upload')}Upload audio or video</button>
       <button class="btn" data-act="import" type="button">${icon('i-doc')}Import PDF or text</button>
     </div>
+    <button class="link-btn" data-act="sample" type="button">No microphone handy? Try a 17-second sample recording</button>
     ${ai.hasKey() ? '' : '<a class="welcome-link" href="#/settings">Add a Claude API key for full AI features</a>'}
   </div>`;
 }
@@ -734,7 +735,22 @@ async function createFromText() {
   if (settings.autoSummarize) summarizeNote(n);
 }
 
+async function importSample() {
+  showProgress('Fetching the sample');
+  try {
+    const r = await fetch('samples/meeting-sample.wav');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const b = await r.blob();
+    hideProgress();
+    importAudioFile(new File([b], 'Sample planning meeting.wav', { type: 'audio/wav' }));
+  } catch (e) {
+    hideProgress();
+    toast('Could not load the sample: ' + (e.message || e));
+  }
+}
+
 const actions = {
+  sample: importSample,
   record: startRecording,
   upload: () => $('#file-audio').click(),
   import: () => $('#file-doc').click(),

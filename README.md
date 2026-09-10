@@ -18,6 +18,8 @@ Live: https://prathammukewar.github.io/summaryai-clone/
 - **Export** as Markdown, plain text, or SRT subtitles, copy to the clipboard, share through the system share sheet, or have the notes read aloud.
 - **Organize** notes into folders and search across titles, transcripts, and summaries.
 
+There is a short sample recording on the welcome screen if you want to try it without a microphone.
+
 Notes and audio live in IndexedDB in your browser. There is no backend and no account.
 
 ## AI features
