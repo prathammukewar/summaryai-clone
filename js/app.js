@@ -637,6 +637,8 @@ function renderSettings() {
 }
 
 /* ---------- recording ---------- */
+const PLATFORM = window.SUMMARY_PLATFORM || {};
+
 function drawLevels(buf, paused) {
   const c = $('#rec-wave');
   if (!c) return;
@@ -655,14 +657,57 @@ function drawLevels(buf, paused) {
     ctx.fill();
   }
 }
-async function startRecording() {
+
+// Extension only: capture the audio of the active tab.
+async function getTabStream() {
+  if (!PLATFORM.extension || typeof chrome === 'undefined' || !chrome.tabs) throw new Error('Tab capture only works inside the Chrome extension.');
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab) throw new Error('No active tab to capture.');
+  let streamId;
+  try {
+    streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+  } catch (e) {
+    const r = await chrome.runtime.sendMessage({ type: 'tab-stream-id', tabId: tab.id }).catch(() => null);
+    if (!r || r.error) throw new Error(r && r.error ? r.error : (e && e.message) || String(e));
+    streamId = r.id;
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId } },
+    video: false,
+  });
+  return { stream, title: tab.title || '' };
+}
+function tabErrorText(e) {
+  const m = String((e && e.message) || e);
+  if (/invoked|gesture|activeTab|Extension has not been/i.test(m)) return 'Chrome only lets the extension capture a tab after you click its icon on that tab. Click the Summary AI icon on the tab you want to record, then start again.';
+  if (/chrome:\/\/|Cannot capture|not capturable/i.test(m)) return 'This tab cannot be captured. Chrome pages and the Web Store are off limits.';
+  return 'Could not capture the tab: ' + m;
+}
+
+function startRecording() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('This browser cannot record audio.'); return; }
+  if (recorder) return;
+  if (PLATFORM.extension) {
+    $('#rec-setup').hidden = false;
+    $('#rec-live').hidden = true;
+    $('#rec-overlay').hidden = false;
+    return;
+  }
+  beginRecording('mic');
+}
+async function beginRecording(source) {
   const ov = $('#rec-overlay');
+  const hasSR = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
   $('#rec-time').textContent = '0:00';
-  $('#rec-captions').innerHTML = '<span class="muted">' + ((window.SpeechRecognition || window.webkitSpeechRecognition) ? 'Live captions appear here while you talk.' : 'Live captions are not available in this browser. The transcript is created when you stop.') + '</span>';
+  $('#rec-captions').innerHTML = '<span class="muted">' + (source === 'tab'
+    ? 'Recording the tab. The transcript is created when you stop.'
+    : hasSR ? 'Live captions appear here while you talk.' : 'Live captions are not available here. The transcript is created when you stop.') + '</span>';
   $('#rec-pause').textContent = 'Pause';
   $('#rec-dot').classList.remove('paused');
+  $('#rec-title').textContent = { mic: 'Recording', tab: 'Recording this tab', both: 'Recording tab and mic' }[source] || 'Recording';
   recorder = createRecorder({
+    source,
+    getTabStream,
     lang: settings.speechLang,
     onTick: s => { $('#rec-time').textContent = exp.fmtTime(s); },
     onLevels: drawLevels,
@@ -671,20 +716,34 @@ async function startRecording() {
       el.innerHTML = esc(f) + '<span class="interim">' + esc(i) + '</span>';
       el.scrollTop = el.scrollHeight;
     },
+    onEnded: () => { toast('The captured tab stopped, so the recording was saved.'); stopRecording(); },
   });
   try { await recorder.start(); }
-  catch (e) { recorder = null; toast('Microphone access is needed to record.'); return; }
+  catch (e) {
+    recorder = null;
+    ov.hidden = true;
+    console.error(e);
+    if (source === 'mic' || (e && e.name === 'NotAllowedError' && !/tab/i.test(String(e.message)))) {
+      toast('Microphone access is needed to record.' + (PLATFORM.extension ? ' If Chrome did not ask, open the app in a full tab and allow the microphone there once.' : ''), 7000);
+    } else {
+      toast(tabErrorText(e), 8000);
+    }
+    return;
+  }
+  $('#rec-setup').hidden = true;
+  $('#rec-live').hidden = false;
   ov.hidden = false;
 }
 async function stopRecording() {
   if (!recorder) return;
   const r = recorder;
   recorder = null;
-  const { blob, duration, captions, type } = await r.stop();
+  const { blob, duration, captions, type, tabTitle } = await r.stop();
   $('#rec-overlay').hidden = true;
   if (!blob.size) { toast('Nothing was recorded.'); return; }
+  const when = new Date().toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   const n = await createNote({
-    title: 'Recording ' + new Date().toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
+    title: tabTitle ? tabTitle.slice(0, 80) : 'Recording ' + when,
     source: 'recording', duration, hasAudio: true, audioType: type, transcript: captions, status: 'transcribing',
   });
   await db.putAudio(n.id, blob, type);
@@ -769,6 +828,14 @@ function bindGlobal() {
   $('#rec-stop').addEventListener('click', stopRecording);
   $('#rec-cancel').addEventListener('click', cancelRecording);
   $('#rec-pause').addEventListener('click', togglePause);
+  $('#rec-start').addEventListener('click', () => {
+    const picked = document.querySelector('input[name="rec-source"]:checked');
+    beginRecording(picked ? picked.value : 'mic');
+  });
+  $('#rec-setup-cancel').addEventListener('click', () => { $('#rec-overlay').hidden = true; });
+  $('#act-open-tab').addEventListener('click', () => {
+    if (typeof chrome !== 'undefined' && chrome.tabs) chrome.tabs.create({ url: chrome.runtime.getURL('index.html') });
+  });
   $('#text-save').addEventListener('click', createFromText);
   $('#text-cancel').addEventListener('click', () => { $('#text-overlay').hidden = true; });
   $('#text-close').addEventListener('click', () => { $('#text-overlay').hidden = true; });
@@ -793,6 +860,10 @@ async function init() {
   notes.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   notes.forEach(n => { if (n.status !== 'ready') n.status = 'ready'; n.chat = (n.chat || []).map(m => ({ role: m.role, text: m.text })); });
   bindGlobal();
+  if (PLATFORM.extension) {
+    document.documentElement.classList.add('extension');
+    $('#act-open-tab').hidden = false;
+  }
   renderFolders();
   render();
 }

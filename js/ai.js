@@ -1,7 +1,7 @@
 // Claude calls go straight from the browser to Anthropic with the user's own key.
 import { settings } from './settings.js';
 
-const SDK_URL = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.124.0/+esm';
+const SDK_URL = (window.SUMMARY_PLATFORM && window.SUMMARY_PLATFORM.sdkUrl) || 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.124.0/+esm';
 let Anthropic = null;
 
 export class NoKeyError extends Error {

@@ -1,5 +1,6 @@
-const PDF_URL = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs';
-const PDF_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs';
+const PLATFORM = window.SUMMARY_PLATFORM || {};
+const PDF_URL = PLATFORM.pdfUrl || 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs';
+const PDF_WORKER = PLATFORM.pdfWorkerUrl || 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs';
 
 export async function extractPdf(file, onStatus) {
   const pdfjs = await import(PDF_URL);

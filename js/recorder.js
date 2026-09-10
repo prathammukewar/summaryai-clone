@@ -1,12 +1,16 @@
-// Microphone recording with a live level meter and optional live captions
+// Audio recording from the microphone, the current tab (extension only), or
+// both mixed together, with a live level meter and optional live captions
 // from the browser's SpeechRecognition (Chrome, Edge, Safari).
-export function createRecorder({ onTick, onLevels, onCaption, lang } = {}) {
-  let stream, rec, ctx, analyser, raf, timer, recog;
+export function createRecorder({ onTick, onLevels, onCaption, onEnded, lang, source = 'mic', getTabStream } = {}) {
+  let micStream = null, tabStream = null, rec, ctx, analyser, raf, timer, recog;
+  let tabTitle = '';
   const chunks = [];
   let startAt = 0, pausedTotal = 0, pauseAt = 0, active = false;
   let finalText = '', interim = '';
 
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const useMic = source !== 'tab';
+  const useTab = source !== 'mic';
 
   function elapsed() {
     const now = Date.now();
@@ -14,7 +18,7 @@ export function createRecorder({ onTick, onLevels, onCaption, lang } = {}) {
   }
 
   function startCaptions() {
-    if (!SR) return;
+    if (!SR || !useMic) return;
     recog = new SR();
     recog.continuous = true;
     recog.interimResults = true;
@@ -34,18 +38,48 @@ export function createRecorder({ onTick, onLevels, onCaption, lang } = {}) {
   }
 
   async function start() {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const AC = window.AudioContext || window.webkitAudioContext;
+    ctx = new AC();
+    const inputs = [];
+    try {
+      if (useTab) {
+        if (!getTabStream) throw new Error('Tab capture is not available here.');
+        const t = await getTabStream();
+        tabStream = t.stream;
+        tabTitle = t.title || '';
+        const src = ctx.createMediaStreamSource(tabStream);
+        src.connect(ctx.destination); // keep playing the tab to the user
+        inputs.push(src);
+        tabStream.getAudioTracks().forEach(tr => tr.addEventListener('ended', () => { if (active && onEnded) onEnded(); }));
+      }
+      if (useMic) {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        inputs.push(ctx.createMediaStreamSource(micStream));
+      }
+    } catch (e) {
+      cleanup();
+      throw e;
+    }
+
+    let recStream;
+    if (source === 'mic') {
+      recStream = micStream;
+    } else {
+      const dest = ctx.createMediaStreamDestination();
+      inputs.forEach(s => s.connect(dest));
+      recStream = dest.stream;
+    }
+
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    inputs.forEach(s => s.connect(analyser));
+
     const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
       .find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
-    rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    rec = new MediaRecorder(recStream, mime ? { mimeType: mime } : undefined);
     rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
     rec.start(1000);
 
-    const AC = window.AudioContext || window.webkitAudioContext;
-    ctx = new AC();
-    analyser = ctx.createAnalyser();
-    analyser.fftSize = 256;
-    ctx.createMediaStreamSource(stream).connect(analyser);
     const buf = new Uint8Array(analyser.frequencyBinCount);
     const loop = () => {
       analyser.getByteFrequencyData(buf);
@@ -80,7 +114,7 @@ export function createRecorder({ onTick, onLevels, onCaption, lang } = {}) {
     clearInterval(timer);
     cancelAnimationFrame(raf);
     try { recog && recog.stop(); } catch (e) { /* ignore */ }
-    if (stream) stream.getTracks().forEach(t => t.stop());
+    [micStream, tabStream].forEach(s => { if (s) s.getTracks().forEach(t => t.stop()); });
     if (ctx) ctx.close().catch(() => {});
   }
 
@@ -89,11 +123,11 @@ export function createRecorder({ onTick, onLevels, onCaption, lang } = {}) {
       const duration = elapsed();
       active = false;
       const finish = () => {
-        const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+        const blob = new Blob(chunks, { type: (rec && rec.mimeType) || 'audio/webm' });
         cleanup();
-        resolve({ blob, duration, captions: finalText.trim(), type: blob.type });
+        resolve({ blob, duration, captions: finalText.trim(), type: blob.type, tabTitle });
       };
-      if (rec.state !== 'inactive') { rec.onstop = finish; rec.stop(); }
+      if (rec && rec.state !== 'inactive') { rec.onstop = finish; rec.stop(); }
       else finish();
     });
   }
@@ -106,6 +140,7 @@ export function createRecorder({ onTick, onLevels, onCaption, lang } = {}) {
   return {
     start, stop, pause, resume, cancel,
     get paused() { return !!pauseAt; },
+    get tabTitle() { return tabTitle; },
     hasCaptions: !!SR,
   };
 }

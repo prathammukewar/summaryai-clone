@@ -9,7 +9,7 @@
   --bg: #FFFFFF;
   --bg-soft: #F6F7FA;
   --danger: #D64545;
-  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
@@ -54,6 +54,7 @@ p { margin: 0 0 10px; }
 .btn.danger { color: var(--danger); }
 .btn.danger:hover { background: #FDF1F1; }
 .btn.block { width: 100%; justify-content: flex-start; }
+.btn.subtle { border-style: dashed; color: var(--muted); }
 .btn.sm { height: 38px; padding: 0 14px; border-radius: 8px; font-size: 13px; }
 .btn.sm svg { width: 16px; height: 16px; }
 .icon-btn { background: none; border: 0; padding: 6px; border-radius: 8px; cursor: pointer; color: var(--muted); }
@@ -187,6 +188,12 @@ audio { width: 100%; margin: 8px 0 16px; }
 .sheet h3 { font-size: 18px; }
 .sheet .input { margin-bottom: 10px; }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.source-pick { display: grid; gap: 8px; margin: 14px 0 12px; }
+.source-pick label { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.source-pick label:has(input:checked) { border-color: var(--blue); background: var(--blue-soft); }
+.source-pick input { margin-top: 3px; accent-color: var(--blue); }
+.source-pick strong { display: block; font-size: 14px; font-weight: 600; }
+.source-pick small { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
 .rec-top { display: flex; align-items: center; gap: 10px; }
 .rec-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--danger); animation: pulse 1.2s ease-in-out infinite; }
 .rec-dot.paused { animation: none; background: var(--muted); }

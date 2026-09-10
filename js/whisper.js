@@ -1,6 +1,7 @@
 // On-device speech to text. Decodes audio on the main thread (AudioContext is
 // not available in workers), then hands 16 kHz mono samples to a worker.
-const TF_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/dist/transformers.min.js';
+const PLATFORM = window.SUMMARY_PLATFORM || {};
+const TF_URL = PLATFORM.transformersUrl || 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/dist/transformers.min.js';
 
 let worker = null, workerBroken = false, seq = 0;
 const pending = new Map();
@@ -63,7 +64,10 @@ export async function decodeAudio(blob) {
 async function transcribeOnMainThread(data, model, language, onProgress, onStatus) {
   if (!mainPipe || mainLoaded !== model) {
     onStatus && onStatus('Loading speech model');
-    const { pipeline } = await import(TF_URL);
+    const mod = await import(TF_URL);
+    mod.env.allowLocalModels = false;
+    if (PLATFORM.ortWasm) mod.env.backends.onnx.wasm.wasmPaths = PLATFORM.ortWasm;
+    const { pipeline } = mod;
     const devices = navigator.gpu ? ['webgpu', 'wasm'] : ['wasm'];
     let err = null;
     mainPipe = null;
@@ -92,7 +96,7 @@ export async function transcribe(blob, { model, language, onProgress, onStatus }
     out = await new Promise((resolve, reject) => {
       const id = ++seq;
       pending.set(id, { resolve, reject, onProgress, onStatus });
-      w.postMessage({ id, type: 'transcribe', payload: { buffer: data.buffer, model, language } }, [data.buffer]);
+      w.postMessage({ id, type: 'transcribe', payload: { buffer: data.buffer, model, language, libUrl: TF_URL, wasm: PLATFORM.ortWasm } }, [data.buffer]);
     }).catch(async err => {
       // Fall back to the main thread if the worker could not do the job.
       workerBroken = true;

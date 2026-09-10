@@ -1,5 +1,15 @@
-// Runs Whisper (via transformers.js) off the main thread.
-import { pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/dist/transformers.min.js';
+// Runs Whisper (via transformers.js) off the main thread. The main thread tells
+// the worker where the library and the ONNX runtime live.
+let mod = null;
+
+async function lib(url, wasm) {
+  if (!mod) {
+    mod = await import(url);
+    mod.env.allowLocalModels = false;
+    if (wasm) mod.env.backends.onnx.wasm.wasmPaths = wasm;
+  }
+  return mod;
+}
 
 let pipe = null, loaded = '', device = '';
 
@@ -7,7 +17,8 @@ self.onmessage = async e => {
   const { id, type, payload } = e.data;
   if (type !== 'transcribe') return;
   try {
-    const { buffer, model, language } = payload;
+    const { buffer, model, language, libUrl, wasm } = payload;
+    const { pipeline } = await lib(libUrl, wasm);
     const data = new Float32Array(buffer);
     if (!pipe || loaded !== model) {
       pipe = null;
