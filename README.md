@@ -72,6 +72,15 @@ js/settings.js      persisted settings and option lists
 
 Chrome extensions cannot load code from a CDN, so the libraries are vendored: the Anthropic TypeScript SDK (bundled once with esbuild into a single file), transformers.js, the ONNX runtime it needs, and pdf.js. The website uses the same files.
 
+## If recording stops working
+
+Chrome and macOS each have their own microphone switch, and either one can flip without you touching the extension, typically after a Chrome update. Open Settings in the extension and press "Check microphone": it names the actual cause and gives you a button to the right settings page. The two usual fixes:
+
+- **Blocked by macOS.** System Settings, Privacy & Security, Microphone, turn on Google Chrome. Quit and reopen Chrome if it still fails.
+- **Blocked by Chrome.** The extension's site settings page, Microphone set to Allow. If Chrome never asked in the first place, start one recording from the app opened in a full tab; the side panel cannot always show the prompt.
+
+Tab capture is different: Chrome only lets an extension capture a tab after you have clicked its icon on that tab.
+
 ## Not included
 
 The real product also joins calendar meetings with a bot, transcribes YouTube links, and syncs across devices through an account. None of that is possible from a static page, so it is out of scope here.

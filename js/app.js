@@ -24,12 +24,54 @@ const busy = new Map();
 /* ---------- helpers ---------- */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 let toastTimer;
-function toast(msg, ms = 3400) {
+function toast(msg, ms = 3400, action) {
   const t = $('#toast');
   t.textContent = msg;
+  if (action) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = action.label;
+    b.addEventListener('click', () => { t.classList.remove('show'); action.run(); });
+    t.appendChild(b);
+  }
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+  toastTimer = setTimeout(() => t.classList.remove('show'), action ? Math.max(ms, 12000) : ms);
+}
+
+// Open a settings page the user can fix a permission on. Works from the
+// extension (Chrome lets extensions open chrome:// and x-apple URLs in a tab)
+// and degrades to window.open on the website.
+function openSettingsUrl(url) {
+  if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.create) chrome.tabs.create({ url });
+  else window.open(url, '_blank');
+}
+const MAC_MIC_SETTINGS = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone';
+const MAC_SOUND_SETTINGS = 'x-apple.systempreferences:com.apple.preference.sound';
+const chromeSiteSettings = () => 'chrome://settings/content/siteDetails?site=' + encodeURIComponent(location.origin);
+
+// Turn a getUserMedia failure into a sentence that names the real cause and
+// the place to fix it. The error names are the browser's; the messages vary.
+function micFailure(e) {
+  const name = (e && e.name) || '';
+  const msg = String((e && e.message) || '');
+  const mac = /mac/i.test(navigator.platform) || /Mac OS/.test(navigator.userAgent);
+  if (name === 'NotAllowedError' && /system|operating|os level|by the os/i.test(msg)) {
+    return { text: 'Your Mac is blocking the microphone for Chrome, not the extension. In System Settings go to Privacy & Security, then Microphone, and turn on Google Chrome. If it still fails afterwards, quit Chrome fully and reopen it.', action: { label: 'Open System Settings', run: () => openSettingsUrl(MAC_MIC_SETTINGS) } };
+  }
+  if (name === 'NotAllowedError') {
+    return { text: 'Chrome is blocking the microphone for this extension. Open its site settings and set Microphone to Allow.' + (PLATFORM.extension ? ' If Chrome never asked you at all, open the app in a full tab and start a recording there once; the side panel cannot always show the permission prompt.' : '') + (mac ? ' If Chrome says the microphone is allowed, the block is in your Mac\'s Privacy & Security settings instead.' : ''), action: { label: 'Open Chrome site settings', run: () => openSettingsUrl(chromeSiteSettings()) } };
+  }
+  if (name === 'NotFoundError' || name === 'OverconstrainedError' || name === 'DevicesNotFoundError') {
+    return { text: 'No microphone was found. Check that one is connected and selected as the input in Sound settings.', action: mac ? { label: 'Open Sound settings', run: () => openSettingsUrl(MAC_SOUND_SETTINGS) } : null };
+  }
+  if (name === 'NotReadableError' || name === 'AbortError' || name === 'TrackStartError') {
+    return { text: 'The microphone is busy or unavailable, usually because another app or tab is using it. Close that and try again.', action: null };
+  }
+  if (name === 'SecurityError') {
+    return { text: 'This page is not allowed to use the microphone in this context. Open the app in a full tab and try there.', action: null };
+  }
+  return { text: 'Microphone access failed' + (name ? ' (' + name + (msg ? ': ' + msg : '') + ')' : '') + '.', action: { label: 'Open Chrome site settings', run: () => openSettingsUrl(chromeSiteSettings()) } };
 }
 const fmtDate = iso => new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 const icon = (id, cls = '') => `<svg class="${cls}"><use href="#${id}"/></svg>`;
@@ -608,6 +650,8 @@ function renderSettings() {
       <label class="field">Whisper model<select id="s-whisper">${WHISPER_MODELS.map(m => `<option value="${m[0]}" ${m[0] === settings.whisperModel ? 'selected' : ''}>${m[1]}</option>`).join('')}</select></label>
       <label class="field">Spoken language<select id="s-lang">${SPEECH_LANGS.map(l => `<option value="${l[0]}" ${l[0] === settings.speechLang ? 'selected' : ''}>${l[1]}</option>`).join('')}</select></label>
       <p class="muted small">Live captions while recording use the browser's own speech recognition where available. For languages other than English pick a multilingual model.</p>
+      <div class="row start"><button class="btn sm" type="button" id="s-mic">Check microphone</button><span class="muted small" id="s-mic-result">Finds out exactly why recording fails, if it does.</span></div>
+      <div id="s-mic-fix" hidden></div>
     </section>
     <section class="card">
       <h3>Data</h3>
@@ -630,6 +674,31 @@ function renderSettings() {
   $('#s-auto').addEventListener('change', e => updateSettings({ autoSummarize: e.target.checked }));
   $('#s-whisper').addEventListener('change', e => updateSettings({ whisperModel: e.target.value }));
   $('#s-lang').addEventListener('change', e => updateSettings({ speechLang: e.target.value }));
+  $('#s-mic').addEventListener('click', async e => {
+    const out = $('#s-mic-result');
+    e.target.disabled = true; out.textContent = 'Asking for the microphone…';
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const label = (stream.getAudioTracks()[0] || {}).label || 'a microphone';
+      stream.getTracks().forEach(t => t.stop());
+      out.textContent = 'Microphone works: ' + label + '.';
+      $('#s-mic-fix').hidden = true;
+    } catch (err) {
+      console.error(err);
+      const f = micFailure(err);
+      out.textContent = f.text;
+      const fix = $('#s-mic-fix');
+      fix.innerHTML = '';
+      if (f.action) {
+        const b = document.createElement('button');
+        b.className = 'btn sm primary'; b.type = 'button'; b.textContent = f.action.label;
+        b.addEventListener('click', f.action.run);
+        fix.appendChild(b);
+      }
+      fix.hidden = !f.action;
+    }
+    e.target.disabled = false;
+  });
   $('#s-clear').addEventListener('click', async () => {
     if (!confirm('Delete every note and recording stored in this browser?')) return;
     await db.clear(); notes = []; renderFolders(); toast('All notes deleted.'); renderSettings();
@@ -723,8 +792,9 @@ async function beginRecording(source) {
     recorder = null;
     ov.hidden = true;
     console.error(e);
-    if (source === 'mic' || (e && e.name === 'NotAllowedError' && !/tab/i.test(String(e.message)))) {
-      toast('Microphone access is needed to record.' + (PLATFORM.extension ? ' If Chrome did not ask, open the app in a full tab and allow the microphone there once.' : ''), 7000);
+    if (source === 'mic' || (e && e.name && !/tab/i.test(String(e.message)) && e.name !== 'Error')) {
+      const f = micFailure(e);
+      toast(f.text, 9000, f.action);
     } else {
       toast(tabErrorText(e), 8000);
     }
