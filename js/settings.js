@@ -7,6 +7,8 @@ export const DEFAULTS = {
   speechLang: 'en-US',
   outputLang: 'English',
   autoSummarize: true,
+  theme: 'system',
+  speed: 1,
 };
 
 export const MODELS = [
