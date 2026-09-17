@@ -32,6 +32,12 @@ There is a short sample recording on the welcome screen if you want to try it wi
 
 Notes and audio live in IndexedDB in your browser. There is no backend and no account.
 
+## Interface
+
+Light and dark themes, following the system by default and switchable from the sidebar. Notes are colour-coded by source, search highlights matches inside transcripts, action items are checkboxes that persist, transcripts colour each speaker and follow along with playback, and the recorder draws a live scrolling waveform. Keyboard shortcuts: `R` to record, `N` for a new pasted note, `/` to search, `Esc` to close.
+
+Typeface is [Inter](https://rsms.me/inter/) (SIL Open Font License) and the icons are [Lucide](https://lucide.dev) (ISC). Both are bundled in `vendor/`, so nothing is fetched from a CDN at runtime and everything works offline.
+
 ## AI features
 
 Summaries, chat, translation, and speaker labels call the Claude API directly from the browser using your own key, which you paste into Settings. The key is stored in localStorage and never leaves your machine except in requests to Anthropic. The default model is Claude Opus 5, with Sonnet 5 and Haiku 4.5 as options. Summaries use structured outputs so the response always matches the schema the UI expects.
