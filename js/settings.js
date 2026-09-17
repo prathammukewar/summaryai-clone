@@ -9,6 +9,8 @@ export const DEFAULTS = {
   autoSummarize: true,
   theme: 'system',
   speed: 1,
+  summaryTemplate: 'auto',
+  wordTimestamps: true,
 };
 
 export const MODELS = [
@@ -25,6 +27,7 @@ export const WHISPER_MODELS = [
 ];
 
 export const SPEECH_LANGS = [
+  ['auto', 'Detect automatically (multilingual models only)'],
   ['en-US', 'English (US)'], ['en-GB', 'English (UK)'], ['en-IN', 'English (India)'],
   ['es-ES', 'Spanish'], ['fr-FR', 'French'], ['de-DE', 'German'], ['it-IT', 'Italian'],
   ['pt-BR', 'Portuguese (Brazil)'], ['hi-IN', 'Hindi'], ['ja-JP', 'Japanese'], ['ko-KR', 'Korean'],
@@ -37,6 +40,31 @@ export const LANGS = [
   'Japanese', 'Korean', 'Chinese (Simplified)', 'Chinese (Traditional)', 'Arabic', 'Russian', 'Dutch',
   'Turkish', 'Polish', 'Indonesian', 'Vietnamese', 'Thai', 'Swedish', 'Greek', 'Hebrew', 'Ukrainian',
 ];
+
+// How the summary is shaped. "auto" picks from the transcript itself.
+export const SUMMARY_TEMPLATES = {
+  auto: { label: 'Choose automatically', hint: '' },
+  lecture: {
+    label: 'Lecture or class',
+    hint: `This is a lecture or class. key_points are the concepts taught, each stated so it could be revised from. decisions carry anything administrative that was settled (deadlines, what is on the exam, what moved). action_items are what the student has to do, with the due date the lecturer gave. open_questions are what the lecturer left hanging or told the room to think about. Put anything the lecturer flagged as important or examinable into key_points first.`,
+  },
+  meeting: {
+    label: 'Meeting or standup',
+    hint: `This is a work meeting. Lead with what was decided and who owes what. decisions must be things actually agreed, not things discussed. Every action_item needs an owner when a name was said, and a due date when one was given. open_questions are blockers and unresolved disagreements.`,
+  },
+  interview: {
+    label: 'Interview or user call',
+    hint: `This is an interview or a call with a user or customer. key_points are what the interviewee said, in their framing, not the interviewer's. Prefer their own words. decisions are commitments either side made. open_questions are what to follow up on next time. topics are the themes worth tagging for later synthesis.`,
+  },
+  podcast: {
+    label: 'Podcast or talk',
+    hint: `This is a talk, podcast, or presentation with no participants to assign work to. Expect action_items and decisions to be empty, and do not invent them. Put the weight into overview and key_points, and make key_points substantive claims rather than topic labels.`,
+  },
+  reading: {
+    label: 'Paper or document',
+    hint: `This is a written document rather than speech. key_points are the claims the document makes. decisions is normally empty. open_questions are the limitations, gaps, or questions the document leaves. Say in overview what kind of document it is and what it argues.`,
+  },
+};
 
 function load() {
   try { return { ...DEFAULTS, ...(JSON.parse(localStorage.getItem(KEY)) || {}) }; }

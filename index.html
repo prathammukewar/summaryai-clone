@@ -96,6 +96,7 @@
 
       <nav class="nav" aria-label="Sections">
         <a href="#/notes" data-nav="notes"><svg><use href="#i-notebook-text"/></svg><span>All notes</span><span class="count" id="nav-count"></span></a>
+        <a href="#/ask" data-nav="ask"><svg><use href="#i-wand-sparkles"/></svg><span>Ask your notes</span><span class="kbd nav-kbd">A</span></a>
         <div class="nav-label">Folders</div>
         <div id="folder-list"></div>
         <div class="nav-label">App</div>
@@ -180,6 +181,17 @@
     <div class="row end">
       <button class="btn" id="text-cancel" type="button">Cancel</button>
       <button class="btn primary" id="text-save" type="button"><svg><use href="#i-plus"/></svg>Create note</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="confirm-overlay" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div class="sheet-head"><h3 id="confirm-title"></h3></div>
+    <p class="muted" id="confirm-body"></p>
+    <div class="row end">
+      <button class="btn" id="confirm-no" type="button">Cancel</button>
+      <button class="btn danger" id="confirm-yes" type="button">Delete</button>
     </div>
   </div>
 </div>

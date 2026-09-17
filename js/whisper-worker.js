@@ -17,7 +17,7 @@ self.onmessage = async e => {
   const { id, type, payload } = e.data;
   if (type !== 'transcribe') return;
   try {
-    const { buffer, model, language, libUrl, wasm } = payload;
+    const { buffer, model, language, wordLevel, libUrl, wasm } = payload;
     const { pipeline } = await lib(libUrl, wasm);
     const data = new Float32Array(buffer);
     if (!pipe || loaded !== model) {
@@ -38,10 +38,15 @@ self.onmessage = async e => {
       if (!pipe) throw err || new Error('Could not load the speech model');
     }
     self.postMessage({ id, type: 'status', payload: 'Transcribing' });
-    const opts = { chunk_length_s: 30, stride_length_s: 5, return_timestamps: true };
-    if (!model.endsWith('.en') && language) opts.language = language;
-    const out = await pipe(data, opts);
-    self.postMessage({ id, type: 'result', payload: { text: out.text, chunks: out.chunks, device } });
+    const base = { chunk_length_s: 30, stride_length_s: 5 };
+    if (!model.endsWith('.en') && language) base.language = language;
+    let out, word = false;
+    if (wordLevel) {
+      try { out = await pipe(data, { ...base, return_timestamps: 'word' }); word = true; }
+      catch (e) { out = null; }
+    }
+    if (!out) out = await pipe(data, { ...base, return_timestamps: true });
+    self.postMessage({ id, type: 'result', payload: { text: out.text, chunks: out.chunks, wordLevel: word, device } });
   } catch (err) {
     self.postMessage({ id, type: 'error', payload: String((err && err.message) || err) });
   }

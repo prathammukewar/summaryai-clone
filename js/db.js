@@ -27,16 +27,39 @@ function tx(store, mode, fn) {
   }));
 }
 
+// Audio is stored per part: part 1 under the note id, later parts under
+// "id::2", "id::3" and so on, so a note can be continued with a new recording.
+const audioKey = (id, part = 1) => (part > 1 ? `${id}::${part}` : id);
+
 export const db = {
   allNotes: () => tx('notes', 'readonly', s => s.getAll()),
   getNote: id => tx('notes', 'readonly', s => s.get(id)),
   putNote: n => tx('notes', 'readwrite', s => s.put(n)),
-  deleteNote: id => Promise.all([
+
+  putAudio: (id, blob, type, part = 1) =>
+    tx('audio', 'readwrite', s => s.put({ id: audioKey(id, part), blob, type })),
+  getAudio: (id, part = 1) => tx('audio', 'readonly', s => s.get(audioKey(id, part))),
+
+  // Drop the audio but keep the note, for reclaiming space.
+  dropAudio: (id, parts = 1) => Promise.all(
+    Array.from({ length: parts }, (_, i) =>
+      tx('audio', 'readwrite', s => s.delete(audioKey(id, i + 1))))),
+
+  audioSize: async (id, parts = 1) => {
+    let total = 0;
+    for (let i = 1; i <= parts; i++) {
+      const a = await tx('audio', 'readonly', s => s.get(audioKey(id, i)));
+      if (a && a.blob) total += a.blob.size;
+    }
+    return total;
+  },
+
+  deleteNote: (id, parts = 1) => Promise.all([
     tx('notes', 'readwrite', s => s.delete(id)),
-    tx('audio', 'readwrite', s => s.delete(id)),
+    ...Array.from({ length: Math.max(1, parts) }, (_, i) =>
+      tx('audio', 'readwrite', s => s.delete(audioKey(id, i + 1)))),
   ]),
-  putAudio: (id, blob, type) => tx('audio', 'readwrite', s => s.put({ id, blob, type })),
-  getAudio: id => tx('audio', 'readonly', s => s.get(id)),
+
   clear: () => Promise.all([
     tx('notes', 'readwrite', s => s.clear()),
     tx('audio', 'readwrite', s => s.clear()),

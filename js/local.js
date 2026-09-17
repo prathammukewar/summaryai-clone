@@ -1,6 +1,6 @@
 // Fallbacks that run without an API key: a frequency-based extractive summary
 // and a keyword lookup for questions.
-const STOP = new Set(('a an the and or but if then so of to in on at for with by from as is are was were be been being ' +
+export const STOP = new Set(('a an the and or but if then so of to in on at for with by from as is are was were be been being ' +
   'it its this that these those i you he she we they them his her our your their me him us what which who whom when ' +
   'where why how not no yes do does did done have has had having can could should would will shall may might must just ' +
   'also very really there here about into over under again more most some any each other than too only own same such ' +
@@ -11,7 +11,7 @@ export function sentences(text) {
   return m.map(s => s.trim()).filter(s => s.length > 15);
 }
 
-function words(s) { return s.toLowerCase().match(/[a-z0-9']+/g) || []; }
+export function words(s) { return s.toLowerCase().match(/[a-z0-9']+/g) || []; }
 
 export function localSummary(text) {
   const sents = sentences(text);

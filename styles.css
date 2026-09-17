@@ -201,6 +201,7 @@ p { margin: 0 0 var(--sp-3); }
 .nav a.active { background: var(--primary-soft); color: var(--primary-text); font-weight: 600; }
 .nav a svg { width: 16px; height: 16px; }
 .nav a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav a .nav-kbd { margin-left: auto; color: var(--text-3); }
 .nav a .count { margin-left: auto; font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .nav-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em; color: var(--text-3); font-weight: 650; margin: var(--sp-5) 10px var(--sp-2); }
 .nav-empty { font-size: 12.5px; color: var(--text-3); padding: 4px 10px; }
@@ -547,4 +548,65 @@ html[data-theme="dark"] .src-pdf { color: var(--amber-500); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}
+
+/* ------------------------------------------------ features added in v1.2 */
+
+/* word-level transcript */
+.hint-line { margin: -8px 0 var(--sp-3); }
+.seg .w { border-radius: 4px; padding: 0 1px; cursor: pointer; transition: background .12s, color .12s; }
+.seg .w:hover { background: color-mix(in srgb, var(--primary) 20%, transparent); color: var(--text); }
+.seg .w.on { background: color-mix(in srgb, var(--primary) 34%, transparent); color: var(--text); }
+
+/* speaker labels are buttons now, so they can be renamed */
+button.speaker { border: 0; cursor: pointer; font-family: inherit; transition: filter .15s; }
+button.speaker:hover { filter: brightness(1.12) saturate(1.2); }
+
+/* recording parts */
+.part-divider { display: flex; align-items: center; gap: var(--sp-3); margin: var(--sp-5) 0 var(--sp-3); color: var(--text-3); font-size: 11.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .08em; }
+.part-divider::before, .part-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.player select { width: auto; height: 32px; font-size: 12.5px; flex: none; border-radius: var(--r-sm); background-position: calc(100% - 15px) 14px, calc(100% - 10px) 14px; }
+
+/* citations in Ask answers */
+.cite {
+  display: inline-grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 5px; background: var(--primary); color: var(--on-primary);
+  font-size: 10.5px; font-weight: 700; text-decoration: none; vertical-align: 1px; margin: 0 1px;
+  transition: filter .15s;
+}
+.cite:hover { filter: brightness(1.15); }
+
+/* storage manager */
+.audio-head { display: flex; justify-content: space-between; font-size: 12.5px; font-weight: 600; color: var(--text-2); margin: var(--sp-4) 0 var(--sp-2); padding-bottom: var(--sp-2); border-bottom: 1px solid var(--border); }
+.audio-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
+.audio-list li { display: flex; align-items: center; gap: 11px; padding: 9px 4px; }
+.audio-list li + li { border-top: 1px solid var(--border); }
+.audio-list .note-ic { width: 30px; height: 30px; border-radius: var(--r-sm); }
+.audio-list .note-ic svg { width: 14px; height: 14px; }
+.audio-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.audio-title { font-size: 13.5px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* the template picker sits in a tools row */
+.panel-tools label { margin-right: -2px; }
+
+/* print and save as PDF: drop the app chrome, keep the note */
+@media print {
+  .side, .tabs, .toolbar, .panel-tools, .player, .back, .toast, .overlay, .chat-form, .hint-line, .btnchip { display: none !important; }
+  .app { display: block; }
+  .page { max-width: none; padding: 0; animation: none; }
+  body { background: #fff; color: #000; font-size: 11pt; }
+  .title-input { border: 0; font-size: 20pt; padding: 0; margin: 0 0 6pt; color: #000; }
+  .seg, .bubble, .actions-list li, .note-card { break-inside: avoid; }
+  .seg.active, .seg .w.on { background: none; }
+  .banner { border: 1px solid #ccc; background: none; color: #333; }
+  .sec-head h3 { color: #000; }
+  a { text-decoration: none; color: #000; }
+}
+
+/* inline speaker rename */
+.speaker-edit {
+  display: inline-block; width: auto; min-width: 120px; max-width: 220px;
+  height: 24px; padding: 0 8px; margin-bottom: 3px;
+  font-size: 11.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em;
+  border-radius: var(--r-full); border: 1px solid var(--primary); background: var(--surface);
 }

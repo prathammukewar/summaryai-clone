@@ -1,9 +1,10 @@
 import { db } from './db.js';
-import { settings, update as updateSettings, MODELS, WHISPER_MODELS, SPEECH_LANGS, LANGS } from './settings.js';
+import { settings, update as updateSettings, MODELS, WHISPER_MODELS, SPEECH_LANGS, LANGS, SUMMARY_TEMPLATES } from './settings.js';
 import { createRecorder } from './recorder.js';
 import * as whisper from './whisper.js';
 import * as ai from './ai.js';
 import { localSummary, localAnswer } from './local.js';
+import * as askNotes from './ask.js';
 import { extractPdf, readText } from './importers.js';
 import * as exp from './export.js';
 import { md, esc } from './markdown.js';
@@ -19,11 +20,15 @@ let route = { view: 'notes' };
 let query = '';
 let playerUrl = null;
 let listAnimated = false;
+let audioPart = 1;
+let continueTarget = null;
 let recorder = null;
 const busy = new Map();
 
 /* ---------- helpers ---------- */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const sortNotes = () => notes.sort((a, b) =>
+  (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (a.createdAt < b.createdAt ? 1 : -1));
 let toastTimer;
 function toast(msg, ms = 3400, action) {
   const t = $('#toast');
@@ -107,6 +112,32 @@ function progressText(p) {
   if (p.status === 'initiate') return 'Preparing speech model';
   return 'Loading speech model';
 }
+// Native confirm() and prompt() are unreliable inside a side panel, so the app
+// brings its own.
+function confirmSheet(title, body, yesLabel = 'Delete') {
+  return new Promise(resolve => {
+    const ov = $('#confirm-overlay');
+    $('#confirm-title').textContent = title;
+    $('#confirm-body').textContent = body;
+    $('#confirm-yes').textContent = yesLabel;
+    ov.hidden = false;
+    $('#confirm-yes').focus();
+    const done = ok => {
+      ov.hidden = true;
+      $('#confirm-yes').removeEventListener('click', yes);
+      $('#confirm-no').removeEventListener('click', no);
+      document.removeEventListener('keydown', key);
+      resolve(ok);
+    };
+    const yes = () => done(true);
+    const no = () => done(false);
+    const key = e => { if (e.key === 'Escape') done(false); };
+    $('#confirm-yes').addEventListener('click', yes);
+    $('#confirm-no').addEventListener('click', no);
+    document.addEventListener('keydown', key);
+  });
+}
+
 function showProgress(text) { $('#progress-text').textContent = text; $('#progress-overlay').hidden = false; }
 function hideProgress() { $('#progress-overlay').hidden = true; }
 
@@ -116,7 +147,8 @@ async function createNote(partial) {
   const n = {
     id: uid(), title: 'Untitled note', createdAt: now, updatedAt: now, folder: '', source: 'text',
     duration: null, transcript: '', segments: null, summary: null, summaryMode: null, translations: {},
-    chat: [], hasAudio: false, audioType: '', status: 'ready', ...partial,
+    chat: [], hasAudio: false, audioType: '', status: 'ready',
+    pinned: false, audioParts: 0, template: 'auto', ...partial,
   };
   notes.unshift(n);
   await db.putNote(n);
@@ -146,6 +178,7 @@ function refresh(n) {
 function parseHash() {
   const parts = (location.hash || '#/notes').replace(/^#/, '').split('/').filter(Boolean);
   if (parts[0] === 'settings') return { view: 'settings' };
+  if (parts[0] === 'ask') return { view: 'ask' };
   if (parts[0] === 'folder') return { view: 'notes', folder: decodeURIComponent(parts[1] || '') };
   if (parts[0] === 'notes' && parts[1]) return { view: 'note', id: parts[1] };
   return { view: 'notes' };
@@ -156,12 +189,14 @@ function render() {
   if (playerUrl) { URL.revokeObjectURL(playerUrl); playerUrl = null; }
   $('#side').classList.remove('open');
   if (route.view === 'settings') { current = null; renderSettings(); }
+  else if (route.view === 'ask') { current = null; renderAsk(); }
   else if (route.view === 'note') {
     current = notes.find(n => n.id === route.id);
     if (!current) { location.hash = '#/notes'; return; }
     tab = 'summary';
     renderNote();
   } else { current = null; renderList(); }
+  if (route.view !== 'note') audioPart = 1;
   highlightNav();
   window.scrollTo(0, 0);
 }
@@ -169,6 +204,7 @@ function highlightNav() {
   $$('.nav a').forEach(a => a.classList.remove('active'));
   let el = null;
   if (route.view === 'settings') el = $('[data-nav="settings"]');
+  else if (route.view === 'ask') el = $('[data-nav="ask"]');
   else if (route.folder) el = $$('#folder-list a').find(a => a.dataset.folder === route.folder);
   else if (route.view === 'notes') el = $('[data-nav="notes"]');
   if (el) el.classList.add('active');
@@ -308,13 +344,16 @@ async function renderNote() {
           <button type="button" data-x="md">${icon('i-download')}Download Markdown</button>
           <button type="button" data-x="txt">${icon('i-file-text')}Download transcript (.txt)</button>
           ${hasTs ? `<button type="button" data-x="srt">${icon('i-file-music')}Download subtitles (.srt)</button>` : ''}
+          <button type="button" data-x="print">${icon('i-file-text')}Print or save as PDF</button>
           <button type="button" data-x="copy">${icon('i-copy')}Copy ${n.summary ? 'summary' : 'transcript'}</button>
           ${navigator.share ? `<button type="button" data-x="share">${icon('i-external-link')}Share…</button>` : ''}
         </div></details>
+        <button class="btn sm" id="btn-pin" type="button" title="${n.pinned ? 'Unpin' : 'Pin to the top'}">${icon('i-star')}<span>${n.pinned ? 'Pinned' : 'Pin'}</span></button>
         <button class="btn sm danger" id="btn-delete" type="button">${icon('i-trash')}<span>Delete</span></button>
       </div>
     </div>
     ${n.hasAudio ? `<div class="player">
+      ${(n.audioParts || 1) > 1 ? `<select id="part-pick" aria-label="Recording part">${Array.from({ length: n.audioParts }, (_, i) => `<option value="${i + 1}" ${audioPart === i + 1 ? 'selected' : ''}>Part ${i + 1}</option>`).join('')}</select>` : ''}
       <audio id="player" controls preload="metadata"></audio>
       <div class="speed" role="group" aria-label="Playback speed">
         ${[1, 1.25, 1.5, 2].map(r => `<button type="button" data-speed="${r}" aria-pressed="${settings.speed === r}">${r}x</button>`).join('')}
@@ -332,6 +371,8 @@ async function renderNote() {
     n.folder = v; await saveNote(n); renderFolders(); renderNote();
   });
   $('#btn-summarize').addEventListener('click', () => summarizeNote(n));
+  const pp = $('#part-pick');
+  if (pp) pp.addEventListener('change', e => { audioPart = +e.target.value; renderNote(); });
   $$('[data-speed]').forEach(b => b.addEventListener('click', () => {
     const rate = +b.dataset.speed;
     updateSettings({ speed: rate });
@@ -341,13 +382,13 @@ async function renderNote() {
   }));
   $('#btn-speak').addEventListener('click', () => toggleSpeak(n));
   $$('.menu-list button').forEach(b => b.addEventListener('click', () => { $('.menu').removeAttribute('open'); exportNote(n, b.dataset.x); }));
-  $('#btn-delete').addEventListener('click', async () => {
-    if (!confirm('Delete this note' + (n.hasAudio ? ' and its audio' : '') + '?')) return;
-    notes = notes.filter(x => x.id !== n.id);
-    await db.deleteNote(n.id);
-    renderFolders();
-    location.hash = '#/notes';
-    toast('Note deleted.');
+  $('#btn-delete').addEventListener('click', () => deleteNote(n));
+  $('#btn-pin').addEventListener('click', async () => {
+    n.pinned = !n.pinned;
+    await saveNote(n);
+    sortNotes();
+    renderNote();
+    toast(n.pinned ? 'Pinned to the top of your notes.' : 'Unpinned.');
   });
   $$('.tabs button').forEach(b => b.addEventListener('click', () => {
     tab = b.dataset.tab;
@@ -356,7 +397,7 @@ async function renderNote() {
   }));
   renderPanel();
   if (n.hasAudio) {
-    const a = await db.getAudio(n.id);
+    const a = await db.getAudio(n.id, audioPart);
     const p = $('#player');
     if (a && a.blob && p && current === n) {
       playerUrl = URL.createObjectURL(a.blob);
@@ -401,10 +442,15 @@ function summaryHTML(n) {
   const s = n.summary;
   if (n.status === 'summarizing') return workingHTML(n, 'Summarizing');
   if (n.status === 'transcribing') return workingHTML(n, 'Transcribing');
-  if (!s) return `<div class="empty small"><div class="empty-ic">${icon('i-sparkles')}</div><h3>No summary yet</h3><p>${n.transcript.trim() ? 'Pull the key points, decisions, and action items out of the transcript.' : 'There is no transcript to summarize.'}</p>${n.transcript.trim() ? `<button class="btn primary lg" type="button" data-do="summarize">${icon('i-sparkles')}Summarize</button>` : ''}</div>`;
+  if (!s) return `<div class="empty small"><div class="empty-ic">${icon('i-sparkles')}</div><h3>No summary yet</h3><p>${n.transcript.trim() ? 'Pull the key points, decisions, and action items out of the transcript.' : 'There is no transcript to summarize.'}</p>${n.transcript.trim() ? `<div class="row"><select id="tpl-pick" aria-label="Summary style">${Object.entries(SUMMARY_TEMPLATES).map(([k, v]) => `<option value="${k}" ${(n.template || settings.summaryTemplate || 'auto') === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select><button class="btn primary" type="button" data-do="summarize">${icon('i-sparkles')}Summarize</button></div>` : ''}</div>`;
   const list = (arr, empty) => arr && arr.length ? `<ul>${arr.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : `<p class="muted">${empty}</p>`;
   const done = (s.action_items || []).filter(a => a.done).length;
-  return `${n.summaryMode === 'local'
+  const tplRow = `<div class="panel-tools">
+    <label class="muted small" for="tpl-pick">Summary style</label>
+    <select id="tpl-pick" aria-label="Summary style">${Object.entries(SUMMARY_TEMPLATES).map(([k, v]) => `<option value="${k}" ${(n.template || 'auto') === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select>
+    <button class="btn sm" type="button" data-do="summarize">${icon('i-rotate-ccw')}Regenerate</button>
+  </div>`;
+  return tplRow + `${n.summaryMode === 'local'
     ? `<div class="banner">${icon('i-circle-alert')}<span>Basic on-device summary. <a href="#/settings">Add a Claude API key</a> for a real one.</span></div>`
     : `<div class="banner soft">${icon('i-sparkles')}<span>Generated by ${esc(modelLabel())}</span></div>`}
     ${section('i-message-square-quote', 'Overview', `<p class="lead">${esc(s.overview)}</p>`)}
@@ -423,16 +469,33 @@ function transcriptHTML(n) {
     return workingHTML(n, 'Transcribing') + (n.transcript ? `<div class="banner soft">${icon('i-audio-lines')}<span>Live captions so far: ${esc(n.transcript.slice(-400))}</span></div>` : '');
   }
   const tools = `<div class="panel-tools">
+    <button class="btn sm" type="button" data-do="continue">${icon('i-mic')}Continue recording</button>
     ${n.hasAudio ? `<button class="btn sm" type="button" data-do="retranscribe">${icon('i-rotate-ccw')}Re-transcribe</button>` : ''}
     ${n.transcript.trim() ? `<button class="btn sm" type="button" data-do="speakers">${icon('i-users')}Label speakers</button><button class="btn sm" type="button" data-do="edit">${icon('i-pencil')}Edit</button>` : ''}
   </div>`;
   if (!n.transcript.trim()) return `<div class="empty small"><div class="empty-ic">${icon('i-audio-lines')}</div><h3>No transcript</h3><p>${n.hasAudio ? 'Transcription produced no text. Try re-transcribing, or check the spoken language in Settings.' : 'Nothing here yet.'}</p>${tools}</div>`;
   if (n.segments && n.segments.length) {
     const speakers = [...new Set(n.segments.map(x => x.speaker).filter(Boolean))];
-    return tools + `<div class="segments">${n.segments.map((sg, i) => {
+    const anyWords = n.segments.some(sg => sg.words && sg.words.length);
+    let lastPart = null;
+    const rows = n.segments.map((sg, i) => {
+      const part = sg.part || 1;
+      let divider = '';
+      if ((n.audioParts || 1) > 1 && part !== lastPart) {
+        divider = `<div class="part-divider"><span>Part ${part}</span></div>`;
+        lastPart = part;
+      }
       const sp = speakers.indexOf(sg.speaker);
-      return `<div class="seg" data-i="${i}" ${sg.start != null ? `data-start="${sg.start}"` : ''}>${sg.start != null ? `<button class="ts" type="button" data-seek="${sg.start}">${exp.fmtTime(sg.start)}</button>` : ''}<div class="seg-body">${sg.speaker ? `<span class="speaker sp-${sp % 5}">${esc(sg.speaker)}</span><br>` : ''}${esc(sg.text)}</div></div>`;
-    }).join('')}</div>`;
+      // with word timings, every word becomes its own seek target
+      const body = sg.words && sg.words.length
+        ? sg.words.map(w => `<span class="w"${w.start != null ? ` data-w="${w.start}"` : ''}>${esc(w.text)}</span>`).join(' ')
+        : esc(sg.text);
+      const label = sg.speaker
+        ? `<button class="speaker sp-${sp % 5}" type="button" data-rename="${esc(sg.speaker)}" title="Rename this speaker">${esc(sg.speaker)}</button><br>`
+        : '';
+      return divider + `<div class="seg" data-i="${i}" data-part="${part}"${sg.start != null ? ` data-start="${sg.start}"` : ''}>${sg.start != null ? `<button class="ts" type="button" data-seek="${sg.start}" data-seek-part="${part}">${exp.fmtTime(sg.start)}</button>` : ''}<div class="seg-body">${label}${body}</div></div>`;
+    }).join('');
+    return tools + (anyWords ? '<p class="muted small hint-line">Click any word to jump the audio there.</p>' : '') + `<div class="segments">${rows}</div>`;
   }
   return tools + `<div class="prose">${n.transcript.split(/\n+/).filter(p => p.trim()).map(p => `<p>${esc(p)}</p>`).join('')}</div>`;
 }
@@ -468,11 +531,17 @@ function bindPanel() {
     speakers: () => labelSpeakers(n),
     edit: () => editTranscript(n),
     translate: () => translateNote(n),
+    continue: () => continueRecording(n),
   };
   $$('#panel [data-do]').forEach(b => b.addEventListener('click', () => handlers[b.dataset.do]()));
-  $$('#panel [data-seek]').forEach(b => b.addEventListener('click', () => {
-    const p = $('#player'); if (!p) return; p.currentTime = +b.dataset.seek; p.play();
+  $$('#panel [data-seek]').forEach(b => b.addEventListener('click', () => seekTo(+b.dataset.seek, +b.dataset.seekPart || 1)));
+  $$('#panel .w[data-w]').forEach(w => w.addEventListener('click', () => {
+    const seg = w.closest('.seg');
+    seekTo(+w.dataset.w, seg ? +seg.dataset.part || 1 : 1);
   }));
+  $$('#panel [data-rename]').forEach(b => b.addEventListener('click', () => renameSpeaker(n, b.dataset.rename, b)));
+  const tp = $('#tpl-pick');
+  if (tp) tp.addEventListener('change', async e => { n.template = e.target.value; await saveNote(n); });
   $$('#panel .btnchip').forEach(b => b.addEventListener('click', () => ask(n, b.dataset.q)));
   $$('#panel [data-task]').forEach(b => b.addEventListener('click', async () => {
     const item = n.summary && n.summary.action_items[+b.dataset.task];
@@ -493,31 +562,107 @@ function bindPanel() {
   if (log) log.scrollTop = log.scrollHeight;
 }
 
+// Seeking may have to switch to another recording part first.
+function seekTo(time, part = 1) {
+  if (part !== audioPart) {
+    audioPart = part;
+    renderNote();
+    setTimeout(() => {
+      const p = $('#player');
+      if (p) { p.currentTime = time; p.play().catch(() => {}); }
+    }, 250);
+    return;
+  }
+  const p = $('#player');
+  if (!p) return;
+  p.currentTime = time;
+  p.play().catch(() => {});
+}
+
+// Rename in place: the label becomes an input, Enter commits, Escape cancels.
+function renameSpeaker(n, from, btn) {
+  if (!btn || btn.dataset.editing) return;
+  btn.dataset.editing = '1';
+  const input = document.createElement('input');
+  input.className = 'speaker-edit';
+  input.value = from;
+  input.setAttribute('aria-label', `Rename ${from}`);
+  btn.replaceWith(input);
+  input.focus();
+  input.select();
+  let closed = false;
+  const commit = async save => {
+    if (closed) return;
+    closed = true;
+    const to = input.value.trim();
+    if (save && to && to !== from) {
+      let count = 0;
+      n.segments.forEach(sg => { if (sg.speaker === from) { sg.speaker = to; count++; } });
+      await saveNote(n);
+      renderPanel();
+      toast(`Renamed ${count} line${count === 1 ? '' : 's'} to ${to}.`);
+    } else {
+      renderPanel();
+    }
+  };
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); commit(false); }
+  });
+  input.addEventListener('blur', () => commit(true));
+}
+
+function continueRecording(n) {
+  continueTarget = n;
+  startRecording();
+}
+
 function highlightSegment(e) {
   const t = e.target.currentTime;
-  const segs = $$('.seg[data-start]');
+  const segs = $$('.seg[data-start]').filter(el => (+el.dataset.part || 1) === audioPart);
+  let activeEl = null;
   segs.forEach((el, i) => {
     const s = +el.dataset.start;
     const next = segs[i + 1];
     const end = next ? +next.dataset.start : Infinity;
-    el.classList.toggle('active', t >= s && t < end);
+    const on = t >= s && t < end;
+    el.classList.toggle('active', on);
+    if (on) activeEl = el;
   });
+  $$('.w.on').forEach(w => w.classList.remove('on'));
+  if (activeEl) {
+    const ws = $$('.w[data-w]', activeEl);
+    for (let i = ws.length - 1; i >= 0; i--) {
+      if (t >= +ws[i].dataset.w) { ws[i].classList.add('on'); break; }
+    }
+  }
 }
 
 /* ---------- transcription ---------- */
-async function transcribeNote(n, blob) {
+async function transcribeNote(n, blob, part = 1) {
   n.status = 'transcribing';
   setBusy(n.id, 'Preparing');
   refresh(n);
   try {
     const r = await whisper.transcribe(blob, {
       model: settings.whisperModel,
-      language: langCode(settings.speechLang),
+      // "auto" leaves the language unset so a multilingual model detects it
+      language: settings.speechLang === 'auto' ? null : langCode(settings.speechLang),
+      wordTimestamps: settings.wordTimestamps,
       onProgress: p => setBusy(n.id, progressText(p)),
       onStatus: s => setBusy(n.id, s),
     });
-    if (r.text) { n.transcript = r.text; n.segments = r.segments.length ? r.segments : null; }
-    if (!n.duration && r.duration) n.duration = Math.round(r.duration);
+    if (r.text) {
+      const segs = r.segments.map(sg => ({ ...sg, part }));
+      if (part > 1) {
+        n.transcript = (n.transcript + '\n\n' + r.text).trim();
+        n.segments = (n.segments || []).concat(segs);
+      } else {
+        n.transcript = r.text;
+        n.segments = segs.length ? segs : null;
+      }
+    }
+    if (part === 1 && !n.duration && r.duration) n.duration = Math.round(r.duration);
   } catch (e) {
     console.error(e);
     toast(n.transcript ? 'On-device transcription failed, so the live captions were kept.' : 'Transcription failed: ' + (e.message || e), 5000);
@@ -529,9 +674,10 @@ async function transcribeNote(n, blob) {
   if (settings.autoSummarize && n.transcript.trim()) summarizeNote(n);
 }
 async function retranscribe(n) {
-  const a = await db.getAudio(n.id);
+  const a = await db.getAudio(n.id, audioPart);
   if (!a || !a.blob) { toast('The audio for this note is missing.'); return; }
-  transcribeNote(n, a.blob);
+  if (audioPart === 1 && (n.audioParts || 1) > 1) n.segments = (n.segments || []).filter(sg => (sg.part || 1) !== 1);
+  transcribeNote(n, a.blob, audioPart);
 }
 function editTranscript(n) {
   const p = $('#panel');
@@ -564,7 +710,10 @@ const SUMMARY_SCHEMA = {
 const LABEL_SCHEMA = { type: 'object', properties: { labels: { type: 'array', items: { type: 'object', properties: { index: { type: 'integer' }, speaker: { type: 'string' } }, required: ['index', 'speaker'], additionalProperties: false } } }, required: ['labels'], additionalProperties: false };
 const TURNS_SCHEMA = { type: 'object', properties: { turns: { type: 'array', items: { type: 'object', properties: { speaker: { type: 'string' }, text: { type: 'string' } }, required: ['speaker', 'text'], additionalProperties: false } } }, required: ['turns'], additionalProperties: false };
 
-const summarySystem = () => `You are Summary AI, a note-taking assistant. You receive the transcript of a meeting, lecture, call, or document and turn it into faithful, concise notes.
+const templateHint = tpl => (SUMMARY_TEMPLATES[tpl] && SUMMARY_TEMPLATES[tpl].hint)
+  || 'Work out from the transcript what kind of session this is, a lecture, a meeting, an interview, a talk, or a written document, and shape the notes to fit it.';
+
+const summarySystem = (tpl) => `You are Summary AI, a note-taking assistant. You receive the transcript of a meeting, lecture, call, or document and turn it into faithful, concise notes.
 
 Rules:
 - Only include what the transcript supports. Never invent names, dates, or numbers.
@@ -575,7 +724,9 @@ Rules:
 - action_items: concrete follow-ups. owner and due are empty strings when not stated.
 - open_questions: unresolved questions or things to check. Empty if none.
 - topics: 2 to 6 short topic tags.
-- Write everything in ${settings.outputLang}.`;
+- Write everything in ${settings.outputLang}.
+
+${templateHint(tpl)}`;
 
 const chatSystem = n => [{
   type: 'text',
@@ -600,7 +751,7 @@ async function summarizeNote(n) {
   try {
     if (ai.hasKey()) {
       const text = await ai.complete({
-        system: summarySystem(),
+        system: summarySystem(n.template || settings.summaryTemplate || 'auto'),
         messages: [{ role: 'user', content: '<transcript>\n' + n.transcript + '\n</transcript>\n\nProduce the structured notes.' }],
         schema: SUMMARY_SCHEMA,
       });
@@ -713,6 +864,35 @@ async function labelSpeakers(n) {
   refresh(n);
 }
 
+// Deleting keeps the note and its audio in memory until the toast expires, so
+// an accidental delete is one click away from being undone.
+async function deleteNote(n) {
+  const parts = Math.max(1, n.audioParts || (n.hasAudio ? 1 : 0));
+  const blobs = [];
+  for (let i = 1; i <= parts && n.hasAudio; i++) {
+    const a = await db.getAudio(n.id, i);
+    if (a) blobs.push({ part: i, blob: a.blob, type: a.type });
+  }
+  const at = notes.findIndex(x => x.id === n.id);
+  notes = notes.filter(x => x.id !== n.id);
+  await db.deleteNote(n.id, parts);
+  renderFolders();
+  if (route.view === 'note' && current && current.id === n.id) location.hash = '#/notes';
+  else renderListItems();
+  toast(`Deleted “${n.title}”.`, 9000, {
+    label: 'Undo',
+    run: async () => {
+      notes.splice(Math.max(0, at), 0, n);
+      await db.putNote(n);
+      for (const b of blobs) await db.putAudio(n.id, b.blob, b.type, b.part);
+      sortNotes();
+      renderFolders();
+      if (route.view === 'notes') renderListItems();
+      toast('Restored.');
+    },
+  });
+}
+
 /* ---------- speak and export ---------- */
 function toggleSpeak(n) {
   const btn = $('#btn-speak span');
@@ -731,11 +911,94 @@ async function exportNote(n, what) {
     if (what === 'md') exp.download(safe + '.md', exp.noteMarkdown(n), 'text/markdown');
     else if (what === 'txt') exp.download(safe + '.txt', exp.transcriptText(n));
     else if (what === 'srt') exp.download(safe + '.srt', exp.toSRT(n.segments));
+    else if (what === 'print') { window.print(); }
     else if (what === 'copy') { await exp.copyText(n.summary ? exp.summaryMarkdown(n.summary) : exp.transcriptText(n)); toast('Copied.'); }
     else if (what === 'share') await exp.share(n.title, exp.noteMarkdown(n));
   } catch (e) {
     if (!e || e.name !== 'AbortError') toast('Export failed: ' + (e && e.message ? e.message : e));
   }
+}
+
+/* ---------- ask across every note ---------- */
+const ASK_KEY = 'summaryai-clone.ask';
+let askChat = [];
+try { askChat = JSON.parse(localStorage.getItem(ASK_KEY)) || []; } catch (e) { askChat = []; }
+const saveAsk = () => { try { localStorage.setItem(ASK_KEY, JSON.stringify(askChat.slice(-40))); } catch (e) { /* full */ } };
+
+// Turn [1] [2] markers into links to the notes they came from.
+function linkCites(html, picked) {
+  if (!picked || !picked.length) return html;
+  return html.replace(/\[(\d+)\]/g, (m, d) => {
+    const hit = picked[+d - 1];
+    if (!hit) return m;
+    return `<a class="cite" href="#/notes/${hit.note.id}" title="${esc(hit.note.title)}">${d}</a>`;
+  });
+}
+
+const askBubble = (m, i) => `<div class="bubble ${m.role}" data-i="${i}">${
+  m.role === 'assistant'
+    ? (m.text ? linkCites(md(m.text), m.picked) : '<span class="typing"><i></i><i></i><i></i></span>')
+    : esc(m.text)}</div>`;
+
+function renderAsk() {
+  const ready = notes.filter(n => n.transcript.trim()).length;
+  const sugg = ['What did I say I would do?', 'Summarize everything from this week', 'What is still unresolved?', 'Which notes mention deadlines?'];
+  main.innerHTML = `<div class="page">
+    <div class="page-head">
+      <div><h1>Ask your notes</h1><div class="sub">Searches all ${ready} note${ready === 1 ? '' : 's'} with a transcript and answers with citations.</div></div>
+      ${askChat.length ? `<button class="btn" id="ask-clear" type="button">${icon('i-trash')}Clear</button>` : ''}
+    </div>
+    ${ai.hasKey() ? '' : `<div class="banner">${icon('i-circle-alert')}<span>Without an API key this falls back to keyword matching. <a href="#/settings">Add a key</a> for real answers.</span></div>`}
+    ${ready === 0
+      ? `<div class="empty"><div class="empty-ic">${icon('i-inbox')}</div><h3>Nothing to search yet</h3><p>Record or import something first, then come back and ask about it.</p></div>`
+      : `<div class="chat-log" id="ask-log">${askChat.length
+          ? askChat.map(askBubble).join('')
+          : `<div class="chat-empty">${icon('i-message-square-quote')}<p>Ask a question that spans your notes.</p><div class="chips">${sugg.map(q => `<button class="chip btnchip" type="button" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div></div>`}</div>
+        <form class="chat-form" id="ask-form"><input id="ask-input" placeholder="Ask across every note" autocomplete="off"><button class="btn primary" type="submit">${icon('i-sparkles')}Ask</button></form>`}
+  </div>`;
+  const f = $('#ask-form');
+  if (f) f.addEventListener('submit', e => {
+    e.preventDefault();
+    const i = $('#ask-input'), q = i.value.trim();
+    if (!q) return;
+    i.value = '';
+    runAsk(q);
+  });
+  $$('#main .btnchip').forEach(b => b.addEventListener('click', () => runAsk(b.dataset.q)));
+  const c = $('#ask-clear');
+  if (c) c.addEventListener('click', () => { askChat = []; saveAsk(); renderAsk(); });
+  const log = $('#ask-log');
+  if (log) log.scrollTop = log.scrollHeight;
+}
+
+async function runAsk(question) {
+  askChat.push({ role: 'user', text: question });
+  const idx = askChat.push({ role: 'assistant', text: '', picked: [] }) - 1;
+  renderAsk();
+  try {
+    if (ai.hasKey()) {
+      const history = askChat.slice(0, idx - 1).map(m => ({ role: m.role, text: m.text }));
+      const { text, picked } = await askNotes.askAll(notes, question, history, t => {
+        askChat[idx].text += t;
+        const el = $(`#ask-log .bubble[data-i="${idx}"]`);
+        if (el && route.view === 'ask') {
+          el.innerHTML = md(askChat[idx].text);
+          const lg = $('#ask-log');
+          if (lg) lg.scrollTop = lg.scrollHeight;
+        }
+      });
+      askChat[idx].text = text;
+      askChat[idx].picked = picked.map(p => ({ note: { id: p.note.id, title: p.note.title } }));
+    } else {
+      const { text, picked } = askNotes.localAskAll(notes, question);
+      askChat[idx].text = text;
+      askChat[idx].picked = picked.map(p => ({ note: { id: p.note.id, title: p.note.title } }));
+    }
+  } catch (e) {
+    askChat[idx].text = 'Error: ' + ai.describeError(e);
+  }
+  saveAsk();
+  if (route.view === 'ask') renderAsk();
 }
 
 /* ---------- settings view ---------- */
@@ -752,6 +1015,7 @@ function renderSettings() {
       </div>
       <label class="field">Model<select id="s-model">${MODELS.map(m => `<option value="${m[0]}" ${m[0] === settings.model ? 'selected' : ''}>${m[1]}</option>`).join('')}</select></label>
       <label class="field">Write summaries and answers in<select id="s-out">${LANGS.map(l => `<option ${l === settings.outputLang ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="field">Default summary style<select id="s-tpl">${Object.entries(SUMMARY_TEMPLATES).map(([k, v]) => `<option value="${k}" ${settings.summaryTemplate === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select></label>
       <label class="check"><input type="checkbox" id="s-auto" ${settings.autoSummarize ? 'checked' : ''}> Summarize automatically after transcribing or importing</label>
       <p class="muted small">Keys come from console.anthropic.com and usage is billed to that account. Without a key you still get on-device transcription and a basic summary.</p>
     </section>
@@ -761,13 +1025,15 @@ function renderSettings() {
       <label class="field">Whisper model<select id="s-whisper">${WHISPER_MODELS.map(m => `<option value="${m[0]}" ${m[0] === settings.whisperModel ? 'selected' : ''}>${m[1]}</option>`).join('')}</select></label>
       <label class="field">Spoken language<select id="s-lang">${SPEECH_LANGS.map(l => `<option value="${l[0]}" ${l[0] === settings.speechLang ? 'selected' : ''}>${l[1]}</option>`).join('')}</select></label>
       <p class="muted small">Live captions while recording use the browser's own speech recognition where available. For languages other than English pick a multilingual model.</p>
+      <label class="check"><input type="checkbox" id="s-words" ${settings.wordTimestamps ? 'checked' : ''}> <span>Word-level timestamps<br><span class="muted small">Lets you click any word to jump the audio there. Slightly slower to transcribe.</span></span></label>
       <div class="row start"><button class="btn" type="button" id="s-mic">${icon('i-mic')}Check microphone</button><span class="muted small" id="s-mic-result">Finds out exactly why recording fails, if it does.</span></div>
       <div id="s-mic-fix" hidden></div>
     </section>
     <section class="card">
       <div class="card-head">${icon('i-folder-open')}<h3>Data</h3></div>
       <p class="muted">${notes.length} note${notes.length === 1 ? '' : 's'} stored in this browser. Nothing is synced anywhere.</p>
-      <button class="btn danger" type="button" id="s-clear">${icon('i-trash')}Delete all notes and audio</button>
+      <div id="s-audio-list"><p class="muted small">Checking what audio is stored…</p></div>
+      <div class="row start"><button class="btn danger" type="button" id="s-clear">${icon('i-trash')}Delete all notes and audio</button></div>
     </section>
     <p class="fineprint">Unofficial recreation of the Summary AI web app, built as a front-end exercise. Not affiliated with Summary AI.</p>
   </div>`;
@@ -783,6 +1049,9 @@ function renderSettings() {
   $('#s-model').addEventListener('change', e => updateSettings({ model: e.target.value }));
   $('#s-out').addEventListener('change', e => updateSettings({ outputLang: e.target.value }));
   $('#s-auto').addEventListener('change', e => updateSettings({ autoSummarize: e.target.checked }));
+  $('#s-tpl').addEventListener('change', e => updateSettings({ summaryTemplate: e.target.value }));
+  $('#s-words').addEventListener('change', e => updateSettings({ wordTimestamps: e.target.checked }));
+  renderAudioList();
   $('#s-whisper').addEventListener('change', e => updateSettings({ whisperModel: e.target.value }));
   $('#s-lang').addEventListener('change', e => updateSettings({ speechLang: e.target.value }));
   $('#s-mic').addEventListener('click', async e => {
@@ -811,9 +1080,48 @@ function renderSettings() {
     e.target.disabled = false;
   });
   $('#s-clear').addEventListener('click', async () => {
-    if (!confirm('Delete every note and recording stored in this browser?')) return;
+    const ok = await confirmSheet('Delete everything?',
+      `All ${notes.length} note${notes.length === 1 ? '' : 's'} and any stored audio will be removed from this browser. This cannot be undone.`,
+      'Delete everything');
+    if (!ok) return;
     await db.clear(); notes = []; renderFolders(); toast('All notes deleted.'); renderSettings();
   });
+}
+
+// Audio is what fills the disk, so let it be dropped per note while the
+// transcript and summary stay.
+async function renderAudioList() {
+  const box = $('#s-audio-list');
+  if (!box) return;
+  const withAudio = notes.filter(n => n.hasAudio);
+  if (!withAudio.length) { box.innerHTML = '<p class="muted small">No audio stored. Transcripts take almost no space.</p>'; return; }
+  const sized = [];
+  for (const n of withAudio) {
+    sized.push({ n, size: await db.audioSize(n.id, Math.max(1, n.audioParts || 1)) });
+  }
+  sized.sort((a, b) => b.size - a.size);
+  const total = sized.reduce((a, b) => a + b.size, 0);
+  box.innerHTML = `<div class="audio-head"><span>${sized.length} recording${sized.length === 1 ? '' : 's'}</span><span>${fmtBytes(total)}</span></div>
+    <ul class="audio-list">${sized.map(({ n, size }) => `<li>
+      <span class="note-ic ${srcClass(n.source)}">${icon(sourceIcon(n.source))}</span>
+      <span class="audio-body"><span class="audio-title">${esc(n.title)}</span><span class="muted small">${fmtBytes(size)}${(n.audioParts || 1) > 1 ? ` · ${n.audioParts} parts` : ''}${n.transcript.trim() ? '' : ' · no transcript yet'}</span></span>
+      <button class="btn sm" type="button" data-drop="${n.id}" ${n.transcript.trim() ? '' : 'disabled title="Transcribe it first, or the audio is all you have"'}>Free space</button>
+    </li>`).join('')}</ul>`;
+  $$('#s-audio-list [data-drop]').forEach(b => b.addEventListener('click', async () => {
+    const n = notes.find(x => x.id === b.dataset.drop);
+    if (!n) return;
+    const ok = await confirmSheet('Delete this audio?',
+      `The recording for "${n.title}" will be removed. The transcript and summary stay. This cannot be undone.`,
+      'Delete audio');
+    if (!ok) return;
+    await db.dropAudio(n.id, Math.max(1, n.audioParts || 1));
+    n.hasAudio = false;
+    n.audioParts = 0;
+    await saveNote(n);
+    toast('Audio deleted. The transcript is still here.');
+    renderAudioList();
+    updateStorage();
+  }));
 }
 
 /* ---------- recording ---------- */
@@ -949,15 +1257,33 @@ async function stopRecording() {
   $('#rec-overlay').hidden = true;
   if (!blob.size) { toast('Nothing was recorded.'); return; }
   const when = new Date().toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const target = continueTarget;
+  continueTarget = null;
+  if (target && notes.some(x => x.id === target.id)) {
+    const part = (target.audioParts || (target.hasAudio ? 1 : 0)) + 1;
+    await db.putAudio(target.id, blob, type, part);
+    target.audioParts = part;
+    target.hasAudio = true;
+    target.audioType = target.audioType || type;
+    target.duration = (target.duration || 0) + duration;
+    if (captions) target.transcript = (target.transcript + '\n\n' + captions).trim();
+    await saveNote(target);
+    audioPart = part;
+    location.hash = '#/notes/' + target.id;
+    transcribeNote(target, blob, part);
+    return;
+  }
   const n = await createNote({
     title: tabTitle ? tabTitle.slice(0, 80) : 'Recording ' + when,
-    source: 'recording', duration, hasAudio: true, audioType: type, transcript: captions, status: 'transcribing',
+    source: 'recording', duration, hasAudio: true, audioParts: 1, audioType: type,
+    transcript: captions, status: 'transcribing',
   });
-  await db.putAudio(n.id, blob, type);
+  await db.putAudio(n.id, blob, type, 1);
   location.hash = '#/notes/' + n.id;
-  transcribeNote(n, blob);
+  transcribeNote(n, blob, 1);
 }
 function cancelRecording() {
+  continueTarget = null;
   if (recorder) { recorder.cancel(); recorder = null; }
   $('#rec-overlay').hidden = true;
 }
@@ -979,10 +1305,10 @@ function togglePause() {
 
 /* ---------- imports ---------- */
 async function importAudioFile(f) {
-  const n = await createNote({ title: f.name.replace(/\.[^.]+$/, ''), source: 'upload', hasAudio: true, audioType: f.type, status: 'transcribing' });
-  await db.putAudio(n.id, f, f.type);
+  const n = await createNote({ title: f.name.replace(/\.[^.]+$/, ''), source: 'upload', hasAudio: true, audioParts: 1, audioType: f.type, status: 'transcribing' });
+  await db.putAudio(n.id, f, f.type, 1);
   location.hash = '#/notes/' + n.id;
-  transcribeNote(n, f);
+  transcribeNote(n, f, 1);
 }
 async function importDocFile(f) {
   showProgress('Importing ' + f.name);
@@ -1086,6 +1412,7 @@ function bindGlobal() {
     if (e.key === '/') { const f = $('#search'); if (f) { e.preventDefault(); f.focus(); f.select(); } }
     else if (e.key.toLowerCase() === 'r' && $('#rec-overlay').hidden) { e.preventDefault(); actions.record(); }
     else if (e.key.toLowerCase() === 'n' && $('#rec-overlay').hidden) { e.preventDefault(); actions.paste(); }
+    else if (e.key.toLowerCase() === 'a' && $('#rec-overlay').hidden) { e.preventDefault(); location.hash = '#/ask'; }
   });
   document.addEventListener('click', e => { const m = $('.menu[open]'); if (m && !m.contains(e.target)) m.removeAttribute('open'); });
   window.addEventListener('hashchange', render);
@@ -1100,7 +1427,7 @@ async function init() {
     toast('Could not open local storage. Notes will not be saved.', 6000);
     notes = [];
   }
-  notes.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  sortNotes();
   notes.forEach(n => { if (n.status !== 'ready') n.status = 'ready'; n.chat = (n.chat || []).map(m => ({ role: m.role, text: m.text })); });
   bindGlobal();
   if (PLATFORM.extension) {
