@@ -25,16 +25,23 @@ The first recording downloads the Whisper model (about 40 MB) from Hugging Face 
 - **Translate** the summary or transcript into 25+ languages.
 - **Label speakers** in a transcript without losing timestamps.
 - **Play back** a recording and click any transcript line to jump to it.
-- **Export** as Markdown, plain text, or SRT subtitles, copy to the clipboard, share through the system share sheet, or have the notes read aloud.
-- **Organize** notes into folders and search across titles, transcripts, and summaries.
+- **Export** as Markdown, plain text, or SRT subtitles, print or save as PDF, copy to the clipboard, share through the system share sheet, or have the notes read aloud.
+- **Organize** notes into folders, pin the ones you keep coming back to, and search across titles, transcripts, and summaries.
+- **Ask across every note**, not just one. It ranks your notes against the question, sends the ones that match, and answers with citations you can click back to.
+- **Continue a recording** into an existing note. Each stretch is kept as its own part, so the twenty minutes you missed can be added later.
+- **Word-level timestamps.** Click any word in the transcript to jump the audio there, and the current word highlights as it plays.
+- **Summary styles** for a lecture, meeting, interview, talk, or document, since those want genuinely different notes. Set a default or pick one per note.
+- **Rename speakers** once and it applies to every line.
 
 There is a short sample recording on the welcome screen if you want to try it without a microphone.
+
+Deleting a note can be undone from the toast, and Settings has a storage manager that drops the audio for a note while keeping its transcript, since audio is what fills the disk.
 
 Notes and audio live in IndexedDB in your browser. There is no backend and no account.
 
 ## Interface
 
-Light and dark themes, following the system by default and switchable from the sidebar. Notes are colour-coded by source, search highlights matches inside transcripts, action items are checkboxes that persist, transcripts colour each speaker and follow along with playback, and the recorder draws a live scrolling waveform. Keyboard shortcuts: `R` to record, `N` for a new pasted note, `/` to search, `Esc` to close.
+Light and dark themes, following the system by default and switchable from the sidebar. Notes are colour-coded by source, search highlights matches inside transcripts, action items are checkboxes that persist, transcripts colour each speaker and follow along with playback, and the recorder draws a live scrolling waveform. Keyboard shortcuts: `R` to record, `A` to ask across your notes, `N` for a new pasted note, `/` to search, `Esc` to close.
 
 Typeface is [Inter](https://rsms.me/inter/) (SIL Open Font License) and the icons are [Lucide](https://lucide.dev) (ISC). Both are bundled in `vendor/`, so nothing is fetched from a CDN at runtime and everything works offline.
 
