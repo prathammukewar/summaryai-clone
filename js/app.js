@@ -5,6 +5,7 @@ import * as whisper from './whisper.js';
 import * as ai from './ai.js';
 import { localSummary, localAnswer } from './local.js';
 import * as askNotes from './ask.js';
+import * as backup from './backup.js';
 import { extractPdf, readText } from './importers.js';
 import * as exp from './export.js';
 import { md, esc } from './markdown.js';
@@ -1029,6 +1030,18 @@ function renderSettings() {
       <div class="row start"><button class="btn" type="button" id="s-mic">${icon('i-mic')}Check microphone</button><span class="muted small" id="s-mic-result">Finds out exactly why recording fails, if it does.</span></div>
       <div id="s-mic-fix" hidden></div>
     </section>
+    <section class="card" id="backup-card">
+      <div class="card-head">${icon('i-download')}<h3>Backup</h3></div>
+      <p class="muted">Everything lives in this browser's storage, which a cleared profile or a reset browser will wipe without warning. A backup file is the only copy that survives that.</p>
+      <div id="storage-health"></div>
+      <div class="row start">
+        <button class="btn primary" type="button" id="s-backup">${icon('i-download')}Back up notes</button>
+        <button class="btn" type="button" id="s-backup-audio">${icon('i-file-music')}Include audio</button>
+        <button class="btn" type="button" id="s-restore">${icon('i-upload')}Restore from a backup</button>
+      </div>
+      <p class="muted small" id="backup-when"></p>
+    </section>
+
     <section class="card">
       <div class="card-head">${icon('i-folder-open')}<h3>Data</h3></div>
       <p class="muted">${notes.length} note${notes.length === 1 ? '' : 's'} stored in this browser. Nothing is synced anywhere.</p>
@@ -1052,6 +1065,10 @@ function renderSettings() {
   $('#s-tpl').addEventListener('change', e => updateSettings({ summaryTemplate: e.target.value }));
   $('#s-words').addEventListener('change', e => updateSettings({ wordTimestamps: e.target.checked }));
   renderAudioList();
+  renderStorageHealth();
+  $('#s-backup').addEventListener('click', () => downloadBackup(false));
+  $('#s-backup-audio').addEventListener('click', () => downloadBackup(true));
+  $('#s-restore').addEventListener('click', () => $('#file-backup').click());
   $('#s-whisper').addEventListener('change', e => updateSettings({ whisperModel: e.target.value }));
   $('#s-lang').addEventListener('change', e => updateSettings({ speechLang: e.target.value }));
   $('#s-mic').addEventListener('click', async e => {
@@ -1086,6 +1103,83 @@ function renderSettings() {
     if (!ok) return;
     await db.clear(); notes = []; renderFolders(); toast('All notes deleted.'); renderSettings();
   });
+}
+
+// Say plainly whether the browser has promised to keep this data.
+async function renderStorageHealth() {
+  const box = $('#storage-health');
+  if (!box) return;
+  const state = await backup.requestPersistence();
+  const when = settings.lastBackup ? new Date(settings.lastBackup) : null;
+  const days = when ? Math.floor((Date.now() - when.getTime()) / 86400000) : null;
+  const stale = notes.length > 0 && (!when || days > 7);
+  const lines = [];
+  if (!state.supported) {
+    lines.push(`<div class="banner">${icon('i-circle-alert')}<span>This browser will not promise to keep the data. Back up often.</span></div>`);
+  } else if (state.persisted) {
+    lines.push(`<div class="banner soft">${icon('i-check')}<span>The browser has marked this storage as persistent, so it will not be evicted to free space. It is still lost if you clear the browser or the profile.</span></div>`);
+  } else {
+    lines.push(`<div class="banner">${icon('i-circle-alert')}<span>The browser has <strong>not</strong> promised to keep this data and may clear it to free space. Keep a backup.</span></div>`);
+  }
+  if (stale) {
+    lines.push(`<div class="banner">${icon('i-circle-alert')}<span>${when ? `Last backup was ${days} day${days === 1 ? '' : 's'} ago.` : 'You have never made a backup.'} ${notes.length} note${notes.length === 1 ? '' : 's'} are only in this browser.</span></div>`);
+  }
+  box.innerHTML = lines.join('');
+  const w = $('#backup-when');
+  if (w) w.textContent = when ? `Last backup ${when.toLocaleString()}.` : 'No backup yet.';
+}
+
+async function downloadBackup(withAudio) {
+  if (!notes.length) { toast('There is nothing to back up yet.'); return; }
+  showProgress(withAudio ? 'Packing notes and audio' : 'Packing notes');
+  try {
+    const data = await backup.build(notes, {
+      withAudio,
+      onProgress: (d, t) => showProgress(`Packing audio ${d} of ${t}`),
+    });
+    const json = JSON.stringify(data);
+    hideProgress();
+    exp.download(backup.filename(withAudio), json, 'application/json');
+    updateSettings({ lastBackup: new Date().toISOString() });
+    renderStorageHealth();
+    toast(`Backed up ${data.counts.notes} note${data.counts.notes === 1 ? '' : 's'}${withAudio ? ` and ${data.counts.withAudio} audio file${data.counts.withAudio === 1 ? '' : 's'}` : ''}. Keep the file somewhere other than this machine.`, 7000);
+  } catch (e) {
+    hideProgress();
+    console.error(e);
+    toast('Backup failed: ' + (e.message || e), 6000);
+  }
+}
+
+async function restoreBackup(file) {
+  showProgress('Reading the backup');
+  try {
+    const data = JSON.parse(await file.text());
+    backup.validate(data);
+    hideProgress();
+    const clash = data.notes.filter(n => notes.some(x => x.id === n.id)).length;
+    const ok = await confirmSheet(
+      'Restore this backup?',
+      `${data.notes.length} note${data.notes.length === 1 ? '' : 's'} from ${new Date(data.exportedAt).toLocaleString()}.`
+        + (clash ? ` ${clash} already exist here and will be left alone.` : '')
+        + ' Nothing currently in the app is deleted.',
+      'Restore');
+    if (!ok) return;
+    showProgress('Restoring');
+    const res = await backup.restore(data, notes, {
+      mode: 'merge',
+      onProgress: (d, t) => showProgress(`Restoring audio ${d} of ${t}`),
+    });
+    notes = await db.allNotes();
+    sortNotes();
+    hideProgress();
+    renderFolders();
+    render();
+    toast(`Restored ${res.added.length} note${res.added.length === 1 ? '' : 's'}${res.audio ? ` and ${res.audio} audio file${res.audio === 1 ? '' : 's'}` : ''}${res.skipped ? `, skipped ${res.skipped} already here` : ''}.`, 7000);
+  } catch (e) {
+    hideProgress();
+    console.error(e);
+    toast('Could not restore: ' + (e.message || e), 7000);
+  }
 }
 
 // Audio is what fills the disk, so let it be dropped per note while the
@@ -1385,6 +1479,7 @@ function bindGlobal() {
   });
   $('#file-audio').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) importAudioFile(f); });
   $('#file-doc').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) importDocFile(f); });
+  $('#file-backup').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) restoreBackup(f); });
   $('#rec-stop').addEventListener('click', stopRecording);
   $('#rec-cancel').addEventListener('click', cancelRecording);
   $('#rec-pause').addEventListener('click', togglePause);
@@ -1437,6 +1532,16 @@ async function init() {
   renderFolders();
   render();
   updateStorage();
+
+  // Ask the browser to keep this data, and say something if it will not.
+  const state = await backup.requestPersistence();
+  if (notes.length && state.supported && !state.persisted) {
+    toast('This browser has not promised to keep your notes and may clear them to free space. Make a backup.', 10000,
+      { label: 'Open backup settings', run: () => { location.hash = '#/settings'; } });
+  } else if (notes.length >= 3 && !settings.lastBackup) {
+    toast('Your notes exist only in this browser. A backup takes one click.', 9000,
+      { label: 'Back up now', run: () => { location.hash = '#/settings'; } });
+  }
 }
 
 // Exposed for automated checks and debugging.

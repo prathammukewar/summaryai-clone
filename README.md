@@ -37,6 +37,12 @@ There is a short sample recording on the welcome screen if you want to try it wi
 
 Deleting a note can be undone from the toast, and Settings has a storage manager that drops the audio for a note while keeping its transcript, since audio is what fills the disk.
 
+## Back up your notes
+
+Everything lives in one browser's IndexedDB. A cleared profile, a reset browser, or the browser deciding it needs the space will take all of it, with no warning and no undo. Treat the backup file as the real copy.
+
+Settings has **Back up notes**, which writes every note, transcript, summary, and chat to a single JSON file, and **Include audio**, which adds the recordings as well and is much larger. **Restore from a backup** reads one back; it merges rather than overwrites, so notes already present are left alone. The extension asks the browser to mark its storage persistent and tells you in Settings whether that was granted.
+
 Notes and audio live in IndexedDB in your browser. There is no backend and no account.
 
 ## Interface

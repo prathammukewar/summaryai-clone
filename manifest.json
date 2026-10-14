@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Summary AI Notes",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Record a meeting, lecture, or any tab, transcribe it on your device, and get Claude-powered notes you can chat with.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -22,7 +22,8 @@
   "permissions": [
     "sidePanel",
     "tabCapture",
-    "activeTab"
+    "activeTab",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "https://api.anthropic.com/*",

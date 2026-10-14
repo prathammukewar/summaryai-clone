@@ -11,6 +11,7 @@ export const DEFAULTS = {
   speed: 1,
   summaryTemplate: 'auto',
   wordTimestamps: true,
+  lastBackup: null,
 };
 
 export const MODELS = [
