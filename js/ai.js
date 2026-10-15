@@ -21,12 +21,14 @@ function buildParams(base) {
   const p = { model, max_tokens: 16000, ...base };
   // Opus 5 and Fable can decline a request on safety grounds; let the API
   // re-run it on Anthropic's recommended fallback model instead of failing.
-  if (/^claude-(opus-5|fable)/.test(model)) {
+  if (/^claude-(opus-5|fable-5)/.test(model)) {
     p.betas = ['server-side-fallback-2026-07-01'];
     p.fallbacks = 'default';
   }
-  if (!/haiku/.test(model)) {
-    p.output_config = { ...(p.output_config || {}), effort: 'medium' };
+  // Every current model takes an effort hint. Haiku 4.5 is the one that
+  // rejects it, so leave that one alone if it is ever selected.
+  if (!/haiku-4-5/.test(model)) {
+    p.output_config = { ...(p.output_config || {}), effort: settings.effort || 'medium' };
   }
   return p;
 }

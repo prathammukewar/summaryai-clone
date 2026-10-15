@@ -1,5 +1,5 @@
 import { db } from './db.js';
-import { settings, update as updateSettings, MODELS, WHISPER_MODELS, SPEECH_LANGS, LANGS, SUMMARY_TEMPLATES } from './settings.js';
+import { settings, update as updateSettings, MODELS, WHISPER_MODELS, SPEECH_LANGS, LANGS, SUMMARY_TEMPLATES, PRICES, EFFORTS } from './settings.js';
 import { createRecorder } from './recorder.js';
 import * as whisper from './whisper.js';
 import * as ai from './ai.js';
@@ -106,7 +106,16 @@ const relDate = iso => {
 };
 const sourceLabel = src => ({ recording: 'Recording', upload: 'Uploaded file', pdf: 'PDF', text: 'Text' })[src] || 'Note';
 const langCode = l => (l || 'en').split('-')[0];
-function modelLabel() { const m = MODELS.find(x => x[0] === settings.model); return m ? m[1].replace(' (default)', '') : settings.model; }
+function modelLabel() { const m = MODELS.find(x => x[0] === settings.model); return m ? m[1] : settings.model; }
+
+// A concrete number beats "cheapest". An hour of speech is very roughly
+// 9k words, about 12k tokens in, and a summary runs maybe 1.2k tokens out.
+function costPerSummary(model) {
+  const pr = PRICES[model];
+  if (!pr) return null;
+  const cost = (12000 / 1e6) * pr[0] + (1200 / 1e6) * pr[1];
+  return cost < 0.01 ? 'under a cent' : 'about ' + cost.toFixed(2).replace(/^0/, '$0').replace('$0.', '$0.');
+}
 function progressText(p) {
   if (!p) return 'Loading speech model';
   if (p.status === 'progress' && p.file) return `Downloading ${p.file.split('/').pop()} ${Math.round(p.progress || 0)}%`;
@@ -1014,7 +1023,9 @@ function renderSettings() {
         <button class="btn" type="button" id="s-show">Show</button>
         <button class="btn" type="button" id="s-test">${icon('i-check')}Test</button>
       </div>
-      <label class="field">Model<select id="s-model">${MODELS.map(m => `<option value="${m[0]}" ${m[0] === settings.model ? 'selected' : ''}>${m[1]}</option>`).join('')}</select></label>
+      <label class="field">Model<select id="s-model">${MODELS.map(m => `<option value="${m[0]}" ${m[0] === settings.model ? 'selected' : ''}>${esc(m[1])}${m[2] ? ' — ' + esc(m[2]) : ''}</option>`).join('')}</select></label>
+      <label class="field">Effort<select id="s-effort">${EFFORTS.map(e => `<option value="${e[0]}" ${e[0] === settings.effort ? 'selected' : ''}>${esc(e[1])}</option>`).join('')}</select></label>
+      <p class="muted small" id="cost-note"></p>
       <label class="field">Write summaries and answers in<select id="s-out">${LANGS.map(l => `<option ${l === settings.outputLang ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="field">Default summary style<select id="s-tpl">${Object.entries(SUMMARY_TEMPLATES).map(([k, v]) => `<option value="${k}" ${settings.summaryTemplate === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select></label>
       <label class="check"><input type="checkbox" id="s-auto" ${settings.autoSummarize ? 'checked' : ''}> Summarize automatically after transcribing or importing</label>
@@ -1059,7 +1070,17 @@ function renderSettings() {
     catch (err) { toast(ai.describeError(err), 5000); }
     e.target.disabled = false; e.target.textContent = 'Test';
   });
-  $('#s-model').addEventListener('change', e => updateSettings({ model: e.target.value }));
+  const showCost = () => {
+    const el = $('#cost-note');
+    if (!el) return;
+    const c = costPerSummary(settings.model);
+    el.textContent = c
+      ? `Summarizing an hour-long recording with ${modelLabel()} costs roughly ${c}. Prices are per million tokens and billed to your Anthropic account.`
+      : 'Usage is billed to your Anthropic account.';
+  };
+  showCost();
+  $('#s-model').addEventListener('change', e => { updateSettings({ model: e.target.value }); showCost(); });
+  $('#s-effort').addEventListener('change', e => updateSettings({ effort: e.target.value }));
   $('#s-out').addEventListener('change', e => updateSettings({ outputLang: e.target.value }));
   $('#s-auto').addEventListener('change', e => updateSettings({ autoSummarize: e.target.checked }));
   $('#s-tpl').addEventListener('change', e => updateSettings({ summaryTemplate: e.target.value }));

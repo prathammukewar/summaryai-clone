@@ -2,7 +2,8 @@ const KEY = 'summaryai-clone.settings';
 
 export const DEFAULTS = {
   apiKey: '',
-  model: 'claude-opus-5',
+  model: 'claude-haiku-5-5',
+  effort: 'medium',
   whisperModel: 'onnx-community/whisper-tiny.en',
   speechLang: 'en-US',
   outputLang: 'English',
@@ -14,10 +15,27 @@ export const DEFAULTS = {
   lastBackup: null,
 };
 
+// Price is per million tokens, input / output. Summaries send the whole
+// transcript every time, so the input price is what actually bites.
 export const MODELS = [
-  ['claude-opus-5', 'Claude Opus 5 (default)'],
-  ['claude-sonnet-5', 'Claude Sonnet 5'],
-  ['claude-haiku-4-5', 'Claude Haiku 4.5'],
+  ['claude-haiku-5-5', 'Claude Haiku 5.5', 'cheapest, $0.10 / $0.50'],
+  ['claude-sonnet-5-5', 'Claude Sonnet 5.5', 'balanced, $2 / $10'],
+  ['claude-opus-5-5', 'Claude Opus 5.5', 'strongest everyday, $4 / $20'],
+  ['claude-fable-5-1', 'Claude Fable 5.1', 'hardest reasoning, $10 / $50'],
+];
+
+// Roughly what one summary of an hour-long lecture costs, for the Settings note.
+export const PRICES = {
+  'claude-haiku-5-5': [0.10, 0.50],
+  'claude-sonnet-5-5': [2, 10],
+  'claude-opus-5-5': [4, 20],
+  'claude-fable-5-1': [10, 50],
+};
+
+export const EFFORTS = [
+  ['low', 'Low, cheapest and fastest'],
+  ['medium', 'Medium, the default'],
+  ['high', 'High, most thorough'],
 ];
 
 export const WHISPER_MODELS = [

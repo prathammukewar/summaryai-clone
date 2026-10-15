@@ -53,7 +53,7 @@ Typeface is [Inter](https://rsms.me/inter/) (SIL Open Font License) and the icon
 
 ## AI features
 
-Summaries, chat, translation, and speaker labels call the Claude API directly from the browser using your own key, which you paste into Settings. The key is stored in localStorage and never leaves your machine except in requests to Anthropic. The default model is Claude Opus 5, with Sonnet 5 and Haiku 4.5 as options. Summaries use structured outputs so the response always matches the schema the UI expects.
+Summaries, chat, translation, and speaker labels call the Claude API directly from the browser using your own key, which you paste into Settings. The key is stored in localStorage and never leaves your machine except in requests to Anthropic. The default model is Claude Haiku 5.5, which costs well under a cent to summarize an hour of speech; Sonnet 5.5, Opus 5.5 and Fable 5.1 are there if you want more. Settings shows the price of each and estimates what a summary will cost. Summaries use structured outputs so the response always matches the schema the UI expects.
 
 Without a key the app still transcribes and produces a basic extractive summary, and the chat falls back to keyword lookup, so you can try everything before deciding.
 
